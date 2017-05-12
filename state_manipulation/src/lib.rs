@@ -3,6 +3,7 @@ extern crate common;
 
 use common::*;
 use common::Role::*;
+use common::Turn::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 
@@ -54,6 +55,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         player,
         cpu_roles,
         table_roles,
+        turn: Ready,
         ui_context: UIContext::new(),
     }
 }
@@ -111,7 +113,7 @@ pub fn game_update_and_render(platform: &Platform,
         y: 0,
         w: 11,
         h: 3,
-        text: "_".to_string(),
+        text: "Next".to_string(),
         id: 1,
     };
 
@@ -119,7 +121,9 @@ pub fn game_update_and_render(platform: &Platform,
                  &mut state.ui_context,
                  &reverse_spec,
                  left_mouse_pressed,
-                 left_mouse_released) {}
+                 left_mouse_released) {
+        state.turn = state.turn.next();
+    }
 
     draw(platform, state);
 

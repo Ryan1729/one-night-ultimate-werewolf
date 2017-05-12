@@ -28,6 +28,7 @@ pub struct State {
     pub player: Role,
     pub cpu_roles: Vec<Role>,
     pub table_roles: [Role; 3],
+    pub turn: Turn,
     pub ui_context: UIContext,
 }
 
@@ -35,6 +36,30 @@ pub enum Role {
     Werewolf,
     Robber,
     Villager,
+}
+use Role::*;
+
+pub enum Turn {
+    Ready,
+    Werewolves,
+    RobberTurn,
+    Discuss,
+    Vote,
+    Resolution,
+}
+use Turn::*;
+
+impl Turn {
+    pub fn next(&self) -> Turn {
+        match *self {
+            Ready => Werewolves,
+            Werewolves => RobberTurn,
+            RobberTurn => Discuss,
+            Discuss => Vote,
+            Vote => Resolution,
+            Resolution => Ready,
+        }
+    }
 }
 
 pub type UiId = i32;
