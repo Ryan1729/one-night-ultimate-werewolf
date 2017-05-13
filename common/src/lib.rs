@@ -35,7 +35,23 @@ pub struct State {
     pub ui_context: UIContext,
 }
 
-#[derive(PartialEq)]
+impl fmt::Debug for State {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("State")
+            .field("title_screen", &self.title_screen)
+            .field("player", &self.player)
+            .field("cpu_roles", &self.cpu_roles)
+            .field("table_roles", &self.table_roles)
+            .field("turn", &self.turn)
+            .field("player_knowledge", &self.player_knowledge)
+            .field("cpu_knowledge", &self.cpu_knowledge)
+            .field("votes", &self.votes)
+            .field("ui_context", &self.ui_context)
+            .finish()
+    }
+}
+
+#[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Role {
     Werewolf,
     Robber,
@@ -43,10 +59,18 @@ pub enum Role {
 }
 use Role::*;
 
+impl fmt::Display for Role {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", *self)
+    }
+}
+
+#[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Turn {
     Ready,
     Werewolves,
     RobberTurn,
+    RobberReveal,
     Discuss,
     Vote,
     Resolution,
@@ -58,7 +82,9 @@ impl Turn {
         match *self {
             Ready => Werewolves,
             Werewolves => RobberTurn,
+            //we only need the RobberReveal state when the player is the robber
             RobberTurn => Discuss,
+            RobberReveal => RobberTurn.next(),
             Discuss => Vote,
             Vote => Resolution,
             Resolution => Ready,
@@ -66,7 +92,7 @@ impl Turn {
     }
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Participant {
     Player,
     Cpu(usize),
@@ -85,18 +111,24 @@ impl fmt::Display for Participant {
     }
 }
 
+#[derive(Debug)]
 pub struct Knowledge {
     pub known_werewolves: Vec<Participant>,
+    pub role: Role,
 }
 
 impl Knowledge {
-    pub fn new() -> Self {
-        Knowledge { known_werewolves: Vec::new() }
+    pub fn new(role: Role) -> Self {
+        Knowledge {
+            known_werewolves: Vec::new(),
+            role,
+        }
     }
 }
 
 pub type UiId = i32;
 
+#[derive(Debug)]
 pub struct UIContext {
     pub hot: UiId,
     pub active: UiId,

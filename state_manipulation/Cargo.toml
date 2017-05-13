@@ -7,7 +7,7 @@ authors = ["Ryan1729 <Ryan1729@gmail.com>"]
 crate-type = ["dylib"]
 
 [dependencies]
-rand = "0.3"
+rand = "0.3.15"
 
 [dependencies.common]
 path = "../common"

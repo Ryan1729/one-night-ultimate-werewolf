@@ -50,7 +50,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
     let cpu_roles = roles;
 
-    let cpu_knowledge = cpu_roles.iter().map(|_| Knowledge::new()).collect();
+    let cpu_knowledge = cpu_roles.iter().map(|&role| Knowledge::new(role)).collect();
 
     State {
         rng: rng,
@@ -59,7 +59,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         cpu_roles,
         table_roles,
         turn: Ready,
-        player_knowledge: Knowledge::new(),
+        player_knowledge: Knowledge::new(player),
         cpu_knowledge,
         votes: Vec::new(),
         ui_context: UIContext::new(),
@@ -130,7 +130,7 @@ pub fn game_update_and_render(platform: &Platform,
                  left_mouse_released) {
         state.turn = state.turn.next();
     }
-
+    let t = state.turn;
     match state.turn {
         Ready => {
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -138,11 +138,21 @@ pub fn game_update_and_render(platform: &Platform,
             };
         }
         Werewolves => {
+            let werewolves = get_werewolves(state);
+
             let ready = if state.player == Werewolf {
-                (platform.print_xy)(10,
-                                    10,
-                                    "Werewolves, wake up and look for other
-werewolves.");
+                (platform.print_xy)(10, 10, "Werewolves, wake up and look for other werewolves.");
+
+                for i in 0..werewolves.len() {
+                    let index = i as i32;
+
+                    match werewolves[i] {
+                        Player => (platform.print_xy)(10, 12 + index, "You are a werewolf. (duh!)"),
+                        cpu => {
+                            (platform.print_xy)(10, 12 + index, &format!("{} is a werewolf.", cpu))
+                        }
+                    }
+                }
 
                 ready_button(platform, state, left_mouse_pressed, left_mouse_released)
             } else {
@@ -150,8 +160,6 @@ werewolves.");
             };
 
             if ready {
-                let werewolves = get_werewolves(state);
-
                 for &werewolf in werewolves.iter() {
                     match werewolf {
                         Player => {
@@ -169,15 +177,57 @@ werewolves.");
             }
 
         }
-        // RobberTurn,
+        RobberTurn => {
+            if state.player == Robber {
+                (platform.print_xy)(15,
+                                    3,
+                                    "Robber, wake up.
+You may exchange your card with another player’s card,
+and then view your new card.");
+
+
+                let possible_chosen = pick_cpu_player_or_skip(platform,
+                                                              state,
+                                                              left_mouse_pressed,
+                                                              left_mouse_released);
+                match possible_chosen {
+                    Skip => {
+                        state.turn = state.turn.next();
+                    }
+                    Chosen(chosen) => {
+                        swap_roles(state, Player, chosen);
+
+                        state.turn = RobberReveal;
+                    }
+                    NoChoice => {}
+                }
+            } else {
+                if let Some(robber_index) = linear_search(&state.cpu_roles, &Robber) {
+                    let robber = Cpu(robber_index);
+
+                    let other_participants = get_other_participants(state, robber);
+                    if let Some(&chosen) = state.rng.choose(&other_participants) {
+                        swap_roles(state, robber, chosen);
+                    }
+                }
+
+                state.turn = state.turn.next();
+            };
+        }
+        RobberReveal => {
+            (platform.print_xy)(10, 10, &format!("You are now a {}.", state.player));
+
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            }
+        }
         // Discuss,
         Vote => {
 
             let possible_player_vote =
-                get_player_vote(platform, state, left_mouse_pressed, left_mouse_released);
+                pick_cpu_player(platform, state, left_mouse_pressed, left_mouse_released);
 
             if let Some(player_vote) = possible_player_vote {
-
                 state.votes.clear();
 
                 state.votes.push(player_vote);
@@ -195,12 +245,105 @@ werewolves.");
         _ => {}
     }
 
+    if t != state.turn {
+        println!("{:?}", state.turn);
+    }
+
     draw(platform, state);
 
     false
 }
 
-fn get_player_vote(platform: &Platform,
+fn swap_roles(state: &mut State, p1: Participant, p2: Participant) {
+    unsafe {
+        let ptr1 = get_role_ptr(state, p1);
+        let ptr2 = get_role_ptr(state, p2);
+
+        std::ptr::swap(ptr1, ptr2);
+    }
+}
+
+unsafe fn get_role_ptr(state: &mut State, p: Participant) -> *mut Role {
+    match p {
+        Player => &mut state.player,
+        Cpu(i) => &mut state.cpu_roles[i],
+    }
+}
+
+fn linear_search<T: PartialEq>(vector: &Vec<T>, thing: &T) -> Option<usize> {
+    for i in 0..vector.len() {
+        if thing == &vector[i] {
+            return Some(i);
+        }
+    }
+
+    None
+}
+
+fn get_other_participants(state: &State, participant: Participant) -> Vec<Participant> {
+    get_participants(state)
+        .iter()
+        .map(|&p| p)
+        .filter(|&p| p != participant)
+        .collect()
+}
+
+fn get_role_mut<'a>(state: &'a mut State, participant: Participant) -> Option<&'a mut Role> {
+    match participant {
+        Player => Some(&mut state.player),
+        Cpu(i) => state.cpu_roles.get_mut(i),
+    }
+}
+
+fn get_participants(state: &State) -> Vec<Participant> {
+    let mut result = vec![Player];
+
+    for i in 0..state.cpu_roles.len() {
+        result.push(Cpu(i));
+    }
+
+    result
+}
+
+fn pick_cpu_player_or_skip(platform: &Platform,
+                           state: &mut State,
+                           left_mouse_pressed: bool,
+                           left_mouse_released: bool)
+                           -> ParticipantOrSkip {
+    if let Some(p) = pick_cpu_player(platform, state, left_mouse_pressed, left_mouse_released) {
+        Chosen(p)
+    } else {
+
+        if do_button(platform,
+                     &mut state.ui_context,
+                     &ButtonSpec {
+                          x: 0,
+                          y: 8,
+                          w: 11,
+                          h: 3,
+                          text: "Skip".to_string(),
+                          id: 11,
+                      },
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            Skip
+        } else {
+            NoChoice
+        }
+    }
+
+
+
+}
+
+pub enum ParticipantOrSkip {
+    Skip,
+    Chosen(Participant),
+    NoChoice,
+}
+use ParticipantOrSkip::*;
+
+fn pick_cpu_player(platform: &Platform,
                    state: &mut State,
                    left_mouse_pressed: bool,
                    left_mouse_released: bool)
