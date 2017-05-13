@@ -29,9 +29,13 @@ pub struct State {
     pub cpu_roles: Vec<Role>,
     pub table_roles: [Role; 3],
     pub turn: Turn,
+    pub player_knowledge: Knowledge,
+    pub cpu_knowledge: Vec<Knowledge>,
+    pub votes: Vec<Participant>,
     pub ui_context: UIContext,
 }
 
+#[derive(PartialEq)]
 pub enum Role {
     Werewolf,
     Robber,
@@ -59,6 +63,22 @@ impl Turn {
             Vote => Resolution,
             Resolution => Ready,
         }
+    }
+}
+
+#[derive(Clone ,Copy)]
+pub enum Participant {
+    Player,
+    Cpu(usize),
+}
+
+pub struct Knowledge {
+    pub known_werewolves: Vec<Participant>,
+}
+
+impl Knowledge {
+    pub fn new() -> Self {
+        Knowledge { known_werewolves: Vec::new() }
     }
 }
 

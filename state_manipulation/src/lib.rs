@@ -4,6 +4,7 @@ extern crate common;
 use common::*;
 use common::Role::*;
 use common::Turn::*;
+use common::Participant::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 
@@ -49,6 +50,8 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
     let cpu_roles = roles;
 
+    let cpu_knowledge = cpu_roles.iter().map(|_| Knowledge::new()).collect();
+
     State {
         rng: rng,
         title_screen: title_screen,
@@ -56,6 +59,9 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         cpu_roles,
         table_roles,
         turn: Ready,
+        player_knowledge: Knowledge::new(),
+        cpu_knowledge,
+        votes: Vec::new(),
         ui_context: UIContext::new(),
     }
 }
@@ -125,9 +131,114 @@ pub fn game_update_and_render(platform: &Platform,
         state.turn = state.turn.next();
     }
 
+    match state.turn {
+        Ready => {
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            };
+        }
+        Werewolves => {
+            let ready = if state.player == Werewolf {
+                (platform.print_xy)(10,
+                                    10,
+                                    "Werewolves, wake up and look for other
+werewolves.");
+
+                ready_button(platform, state, left_mouse_pressed, left_mouse_released)
+
+            } else {
+                true
+            };
+
+            if ready {
+                let werewolves = get_werewolves(state);
+
+                for &werewolf in werewolves.iter() {
+                    match werewolf {
+                        Player => {
+                            state.player_knowledge.known_werewolves.extend_from_slice(&werewolves);
+                        }
+                        Cpu(index) => {
+                            let ref mut knowledge = state.cpu_knowledge[index];
+
+                            knowledge.known_werewolves.extend_from_slice(&werewolves);
+                        }
+                    }
+                }
+
+                state.turn = state.turn.next();
+            }
+
+
+        }
+        // RobberTurn,
+        // Discuss,
+        Vote => {
+            state.votes.clear();
+
+            let player_vote = Cpu(0); //TODO
+
+            state.votes.push(player_vote);
+
+            for i in 0..state.cpu_knowledge.len() {
+                let vote = get_vote(Cpu(i), &state.cpu_knowledge[i]);
+
+                state.votes.push(vote);
+            }
+
+            state.turn = state.turn.next();
+        }
+        // Resolution,
+        _ => {}
+    }
+
     draw(platform, state);
 
     false
+}
+
+fn get_vote(p: Participant, knowledge: &Knowledge) -> Participant {
+    //TODO decide based on knowledge and don't return p
+    p
+}
+
+fn get_werewolves(state: &State) -> Vec<Participant> {
+    let mut result = Vec::new();
+
+    if state.player == Werewolf {
+        result.push(Player);
+    }
+
+    for i in 0..state.cpu_roles.len() {
+        if state.cpu_roles[i] == Werewolf {
+            result.push(Cpu(i));
+        }
+    }
+
+    result
+}
+
+fn ready_button(platform: &Platform,
+                state: &mut State,
+                left_mouse_pressed: bool,
+                left_mouse_released: bool)
+                -> bool {
+    let size = (platform.size)();
+    let ready_spec = ButtonSpec {
+        x: (size.width / 2) - 6,
+        y: size.height - 4,
+        w: 11,
+        h: 3,
+        text: "Ready".to_string(),
+        id: 2,
+    };
+
+    do_button(platform,
+              &mut state.ui_context,
+              &ready_spec,
+              left_mouse_pressed,
+              left_mouse_released)
+
 }
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {
