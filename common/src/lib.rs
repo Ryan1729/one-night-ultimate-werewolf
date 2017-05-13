@@ -66,10 +66,23 @@ impl Turn {
     }
 }
 
-#[derive(Clone ,Copy)]
+#[derive(Clone,Copy)]
 pub enum Participant {
     Player,
     Cpu(usize),
+}
+use Participant::*;
+
+impl fmt::Display for Participant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        write!(f,
+               "{}",
+               match *self {
+                   Player => "Player".to_string(),
+                   Cpu(i) => format!("Cpu {}", i),
+               })
+    }
 }
 
 pub struct Knowledge {

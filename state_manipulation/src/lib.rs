@@ -145,7 +145,6 @@ pub fn game_update_and_render(platform: &Platform,
 werewolves.");
 
                 ready_button(platform, state, left_mouse_pressed, left_mouse_released)
-
             } else {
                 true
             };
@@ -169,24 +168,28 @@ werewolves.");
                 state.turn = state.turn.next();
             }
 
-
         }
         // RobberTurn,
         // Discuss,
         Vote => {
-            state.votes.clear();
 
-            let player_vote = Cpu(0); //TODO
+            let possible_player_vote =
+                get_player_vote(platform, state, left_mouse_pressed, left_mouse_released);
 
-            state.votes.push(player_vote);
+            if let Some(player_vote) = possible_player_vote {
 
-            for i in 0..state.cpu_knowledge.len() {
-                let vote = get_vote(Cpu(i), &state.cpu_knowledge[i]);
+                state.votes.clear();
 
-                state.votes.push(vote);
+                state.votes.push(player_vote);
+
+                for i in 0..state.cpu_knowledge.len() {
+                    let vote = get_vote(Cpu(i), &state.cpu_knowledge[i]);
+
+                    state.votes.push(vote);
+                }
+
+                state.turn = state.turn.next();
             }
-
-            state.turn = state.turn.next();
         }
         // Resolution,
         _ => {}
@@ -195,6 +198,39 @@ werewolves.");
     draw(platform, state);
 
     false
+}
+
+fn get_player_vote(platform: &Platform,
+                   state: &mut State,
+                   left_mouse_pressed: bool,
+                   left_mouse_released: bool)
+                   -> Option<Participant> {
+    let size = (platform.size)();
+
+    for i in 0..state.cpu_roles.len() {
+        let index = i as i32;
+        let cpu_player = Cpu(i);
+
+        let spec = ButtonSpec {
+            x: (size.width / 2) - 6,
+            y: (index + 2) * 4,
+            w: 11,
+            h: 3,
+            text: cpu_player.to_string(),
+            id: 12 + index,
+        };
+
+        if do_button(platform,
+                     &mut state.ui_context,
+                     &spec,
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            return Some(cpu_player);
+        }
+
+    }
+
+    None
 }
 
 fn get_vote(p: Participant, knowledge: &Knowledge) -> Participant {
