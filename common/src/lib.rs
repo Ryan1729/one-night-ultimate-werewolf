@@ -116,6 +116,7 @@ impl fmt::Display for Participant {
 #[derive(Debug)]
 pub struct Knowledge {
     pub known_werewolves: Vec<Participant>,
+    pub known_villagers: Vec<Participant>,
     pub role: Role,
 }
 
@@ -123,6 +124,7 @@ impl Knowledge {
     pub fn new(role: Role) -> Self {
         Knowledge {
             known_werewolves: Vec::new(),
+            known_villagers: Vec::new(),
             role,
         }
     }

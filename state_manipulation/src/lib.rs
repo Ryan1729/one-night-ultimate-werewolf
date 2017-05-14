@@ -250,7 +250,10 @@ and then view your new card.");
                 for i in 0..state.cpu_knowledge.len() {
                     let voter = Cpu(i);
 
-                    let vote = get_vote(voter, &state.cpu_knowledge[i]);
+                    let vote = get_vote(voter,
+                                        get_participants(state),
+                                        &state.cpu_knowledge[i],
+                                        &mut state.rng);
 
                     state.votes.push((voter, vote));
                 }
@@ -520,9 +523,42 @@ fn pick_cpu_player(platform: &Platform,
     None
 }
 
-fn get_vote(p: Participant, knowledge: &Knowledge) -> Participant {
-    //TODO decide based on knowledge and don't return p
-    p
+fn get_vote(participant: Participant,
+            participants: Vec<Participant>,
+            knowledge: &Knowledge,
+            rng: &mut StdRng)
+            -> Participant {
+    let filterd: Vec<Participant> = if is_werewolf(knowledge.role) {
+        if let Some(&villager) = rng.choose(&knowledge.known_villagers) {
+            return villager;
+        }
+
+        participants.iter()
+            .filter(|p| **p != participant && !knowledge.known_werewolves.contains(p))
+            .map(|&p| p)
+            .collect()
+    } else {
+        if let Some(&werewolf) = rng.choose(&knowledge.known_werewolves) {
+            return werewolf;
+        }
+
+        participants.iter()
+            .filter(|p| **p != participant && !knowledge.known_villagers.contains(p))
+            .map(|&p| p)
+            .collect()
+    };
+
+
+    if let Some(&p) = rng.choose(&filterd) {
+        return p;
+    }
+
+    //vote clockwise
+    *(match participant {
+              Player => participants.get(0),
+              Cpu(i) => participants.get(i + 1),
+          })
+         .unwrap_or(&Player)
 }
 
 fn get_werewolves(state: &State) -> Vec<Participant> {
