@@ -7,6 +7,7 @@ use common::Turn::*;
 use common::Participant::*;
 
 use rand::{StdRng, SeedableRng, Rng};
+use std::collections::HashMap;
 
 //NOTE(Ryan1729): debug_assertions only appears to work correctly when the
 //crate is not a dylib. Assuming you make this crate *not* a dylib on release,
@@ -117,7 +118,7 @@ pub fn game_update_and_render(platform: &Platform,
     let reverse_spec = ButtonSpec {
         x: 0,
         y: 0,
-        w: 11,
+        w: 10,
         h: 3,
         text: "Next".to_string(),
         id: 1,
@@ -133,6 +134,13 @@ pub fn game_update_and_render(platform: &Platform,
     let t = state.turn;
     match state.turn {
         Ready => {
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            };
+        }
+        SeeRole => {
+            (platform.print_xy)(10, 12, &format!("You are a {}.", state.player));
+
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 state.turn = state.turn.next();
             };
@@ -221,7 +229,14 @@ and then view your new card.");
                 state.turn = state.turn.next();
             }
         }
-        // Discuss,
+        Discuss => {
+            //TODO cpu players make claims
+            //TODO player can make claims to affect cpu players claims
+
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            }
+        }
         Vote => {
 
             let possible_player_vote =
@@ -230,19 +245,96 @@ and then view your new card.");
             if let Some(player_vote) = possible_player_vote {
                 state.votes.clear();
 
-                state.votes.push(player_vote);
+                state.votes.push((Player, player_vote));
 
                 for i in 0..state.cpu_knowledge.len() {
-                    let vote = get_vote(Cpu(i), &state.cpu_knowledge[i]);
+                    let voter = Cpu(i);
 
-                    state.votes.push(vote);
+                    let vote = get_vote(voter, &state.cpu_knowledge[i]);
+
+                    state.votes.push((voter, vote));
                 }
 
                 state.turn = state.turn.next();
             }
         }
-        // Resolution,
-        _ => {}
+        Resolution => {
+            for i in 0..state.votes.len() {
+                let (voter, vote) = state.votes[i];
+                (platform.print_xy)(10,
+                                    (i as i32 + 1),
+                                    &format!("{} voted for {}!", voter, vote));
+            }
+
+            let just_votes = &state.votes
+                                  .iter()
+                                  .map(|&(_, v)| v)
+                                  .collect();
+            let targets = count_votes(&just_votes);
+
+            if targets.len() == 0 {
+                (platform.print_xy)(10, 10, "Nobody died.");
+
+                let werewolves = get_werewolves(state);
+
+                let len = werewolves.len();
+                if len == 0 {
+                    (platform.print_xy)(10, 12, "And nobody was a werewolf!");
+                    (platform.print_xy)(10, 13, "Village team wins!");
+                } else {
+                    if len > 1 {
+                        (platform.print_xy)(10, 12, &format!("But there were {} werewolves!", len));
+                    } else {
+                        (platform.print_xy)(10, 12, "But there was a werewolf!");
+                    }
+                    (platform.print_xy)(10, 13, "Werewolf team wins!");
+                }
+            } else {
+                (platform.print_xy)(10, 10, &format!("{} died!", str_list(&targets)));
+
+                let target_roles = targets.iter().filter_map(|&p| get_role(state, p));
+                let hit_werevoles_count = target_roles.filter(|&r| is_werewolf(r)).count();
+
+                if hit_werevoles_count >= 1 {
+                    if hit_werevoles_count == 1 {
+                        (platform.print_xy)(10, 12, "A werewolf died!");
+                    } else {
+                        (platform.print_xy)(10,
+                                            12,
+                                            &format!("{} werewolves died!", hit_werevoles_count));
+                    }
+                    (platform.print_xy)(10, 13, "Village team wins!");
+                } else {
+                    let werewolves = get_werewolves(state);
+
+                    if werewolves.len() > 0 {
+                        (platform.print_xy)(10,
+                                            12,
+                                            "No werewolves died but a player was a werewolf!");
+                        (platform.print_xy)(10, 13, "Werewolf team wins!");
+                    } else {
+                        (platform.print_xy)(10,
+                                            12,
+                                            "No werewolves died but a nobody was a werewolf!");
+                        (platform.print_xy)(10, 13, "Nobody wins!");
+                    }
+                }
+            }
+
+
+            (platform.print_xy)(10, 20, &format!("You are a {}", state.player));
+
+            for i in 0..state.cpu_roles.len() {
+                (platform.print_xy)(10,
+                                    21 + i as i32,
+                                    &format!("{} is a {}", Cpu(i), state.cpu_roles[i]));
+            }
+
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            }
+        }
+
     }
 
     if t != state.turn {
@@ -252,6 +344,58 @@ and then view your new card.");
     draw(platform, state);
 
     false
+}
+
+use std::fmt::Write;
+fn str_list<T: std::fmt::Display>(things: &Vec<T>) -> String {
+    let len = things.len();
+    if len == 0 {
+        "".to_string()
+    } else if len == 1 {
+        format!("{}", things[0])
+    } else if len == 2 {
+        format!("{} and {}", things[0], things[1])
+    } else {
+        let mut result = "".to_string();
+
+        for i in 0..len - 1 {
+            if i == len - 2 {
+                write!(&mut result, "{}, and {}", things[i], things[i + 1]).unwrap();
+            } else {
+                write!(&mut result, "{}, ", things[i]).unwrap();
+            }
+        }
+
+        result
+    }
+}
+
+fn count_votes(votes: &Vec<Participant>) -> Vec<Participant> {
+    let mut counts = HashMap::new();
+
+    for &vote in votes.iter() {
+        let counter = counts.entry(vote).or_insert(0);
+        *counter += 1;
+    }
+
+    let max_count = counts.values()
+        .max()
+        .map(|&c| c)
+        .unwrap_or(0);
+
+    if max_count > 1 {
+        counts.iter()
+            .filter(|&(_, &count)| count == max_count)
+            .map(|(&p, _)| p)
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+fn is_werewolf(role: Role) -> bool {
+    //will be more complicated if we get to the expansions
+    role == Werewolf
 }
 
 fn swap_roles(state: &mut State, p1: Participant, p2: Participant) {
@@ -288,10 +432,10 @@ fn get_other_participants(state: &State, participant: Participant) -> Vec<Partic
         .collect()
 }
 
-fn get_role_mut<'a>(state: &'a mut State, participant: Participant) -> Option<&'a mut Role> {
+fn get_role(state: &State, participant: Participant) -> Option<Role> {
     match participant {
-        Player => Some(&mut state.player),
-        Cpu(i) => state.cpu_roles.get_mut(i),
+        Player => Some(state.player),
+        Cpu(i) => state.cpu_roles.get(i).map(|&r| r),
     }
 }
 

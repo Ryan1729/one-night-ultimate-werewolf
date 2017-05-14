@@ -31,7 +31,7 @@ pub struct State {
     pub turn: Turn,
     pub player_knowledge: Knowledge,
     pub cpu_knowledge: Vec<Knowledge>,
-    pub votes: Vec<Participant>,
+    pub votes: Vec<(Participant, Participant)>,
     pub ui_context: UIContext,
 }
 
@@ -68,6 +68,7 @@ impl fmt::Display for Role {
 #[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Turn {
     Ready,
+    SeeRole,
     Werewolves,
     RobberTurn,
     RobberReveal,
@@ -80,7 +81,8 @@ use Turn::*;
 impl Turn {
     pub fn next(&self) -> Turn {
         match *self {
-            Ready => Werewolves,
+            Ready => SeeRole,
+            SeeRole => Werewolves,
             Werewolves => RobberTurn,
             //we only need the RobberReveal state when the player is the robber
             RobberTurn => Discuss,
@@ -92,7 +94,7 @@ impl Turn {
     }
 }
 
-#[derive(Clone,Copy, PartialEq, Debug)]
+#[derive(Clone,Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Participant {
     Player,
     Cpu(usize),
@@ -105,7 +107,7 @@ impl fmt::Display for Participant {
         write!(f,
                "{}",
                match *self {
-                   Player => "Player".to_string(),
+                   Player => "You".to_string(),
                    Cpu(i) => format!("Cpu {}", i),
                })
     }
