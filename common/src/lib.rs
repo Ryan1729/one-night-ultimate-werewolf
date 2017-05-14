@@ -3,6 +3,7 @@ extern crate rand;
 use std::fmt;
 
 use rand::StdRng;
+use std::collections::HashMap;
 
 pub struct Platform {
     pub print_xy: fn(i32, i32, &str),
@@ -32,6 +33,7 @@ pub struct State {
     pub player_knowledge: Knowledge,
     pub cpu_knowledge: Vec<Knowledge>,
     pub votes: Vec<(Participant, Participant)>,
+    pub claims: HashMap<Participant, Claim>,
     pub ui_context: UIContext,
 }
 
@@ -51,7 +53,7 @@ impl fmt::Debug for State {
     }
 }
 
-#[derive(Clone,Copy, PartialEq, Debug)]
+#[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord)]
 pub enum Role {
     Werewolf,
     Robber,
@@ -72,6 +74,7 @@ pub enum Turn {
     Werewolves,
     RobberTurn,
     RobberReveal,
+    BeginDiscussion,
     Discuss,
     Vote,
     Resolution,
@@ -85,7 +88,8 @@ impl Turn {
             SeeRole => Werewolves,
             Werewolves => RobberTurn,
             //we only need the RobberReveal state when the player is the robber
-            RobberTurn => Discuss,
+            RobberTurn => BeginDiscussion,
+            BeginDiscussion => Discuss,
             RobberReveal => RobberTurn.next(),
             Discuss => Vote,
             Vote => Resolution,
@@ -94,7 +98,7 @@ impl Turn {
     }
 }
 
-#[derive(Clone,Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone,Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub enum Participant {
     Player,
     Cpu(usize),
@@ -128,6 +132,12 @@ impl Knowledge {
             role,
         }
     }
+}
+
+#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy)]
+pub struct Claim {
+    pub self_claim: Role,
+    //TODO represent robber action etc
 }
 
 pub type UiId = i32;

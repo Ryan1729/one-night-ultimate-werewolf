@@ -63,6 +63,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         player_knowledge: Knowledge::new(player),
         cpu_knowledge,
         votes: Vec::new(),
+        claims: HashMap::new(),
         ui_context: UIContext::new(),
     }
 }
@@ -134,6 +135,10 @@ pub fn game_update_and_render(platform: &Platform,
     let t = state.turn;
     match state.turn {
         Ready => {
+            (platform.print_xy)(10, 12, "Ready to start a game?");
+
+            //TODO pick roles and number of players
+
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 state.turn = state.turn.next();
             };
@@ -229,13 +234,56 @@ and then view your new card.");
                 state.turn = state.turn.next();
             }
         }
+        BeginDiscussion => {
+            state.claims.clear();
+
+            let mut first_speakers = get_other_participants(state, Player);
+            let len = first_speakers.len();
+            if len > 0 {
+                let first_speaker_count = state.rng.gen_range(0, len);
+
+                state.rng.shuffle(&mut first_speakers);
+                for i in 0..first_speaker_count {
+                    if let Some(participant) = first_speakers.pop() {
+                        make_cpu_claim(state, participant);
+                    }
+                }
+            }
+
+            state.turn = state.turn.next();
+        }
         Discuss => {
-            //TODO cpu players make claims
             //TODO player can make claims to affect cpu players claims
+            if let Some(player_claim_or_silence) =
+                get_player_claim_or_silence(platform,
+                                            state,
+                                            left_mouse_pressed,
+                                            left_mouse_released) {
+                match player_claim_or_silence {
+                    ActualClaim(player_claim) => insert_claim(state, Player, player_claim),
+                    Silence => {}
+                }
+
+                make_remaining_claims(state);
+            }
+
+            let claims = get_claim_vec(state);
+
+            for i in 0..claims.len() {
+                let index = i as i32;
+
+                display_claim(platform, 10, 6 + (index * MAX_CLAIM_HEIGHT), &claims[i]);
+            }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                //if the player doesn't want to make a claim/see the reminaing claims,
+                //that's their business, but the cpu players should get to see what
+                //the thother cpu players say.
+                make_remaining_claims(state);
+
                 state.turn = state.turn.next();
             }
+
         }
         Vote => {
 
@@ -347,6 +395,107 @@ and then view your new card.");
     draw(platform, state);
 
     false
+}
+
+const MAX_CLAIM_HEIGHT: i32 = 3;
+
+fn get_knowledge(state: &State, participant: Participant) -> Option<&Knowledge> {
+    match participant {
+        Player => Some(&state.player_knowledge),
+        Cpu(index) => state.cpu_knowledge.get(index),
+    }
+}
+fn make_cpu_claim(state: &mut State, participant: Participant) {
+    if participant == Player {
+        return;
+    }
+
+    if let Some(role) = get_knowledge(state, participant).map(|k| k.role) {
+        let claim = if is_werewolf(role) {
+            //TODO better lying
+            Claim { self_claim: Villager }
+
+        } else {
+            Claim { self_claim: role }
+        };
+
+        insert_claim(state, participant, claim);
+    };
+}
+
+enum ClaimOrSilence {
+    ActualClaim(Claim),
+    Silence,
+}
+use ClaimOrSilence::*;
+
+fn get_player_claim_or_silence(platform: &Platform,
+                               state: &mut State,
+                               left_mouse_pressed: bool,
+                               left_mouse_released: bool)
+                               -> Option<ClaimOrSilence> {
+
+    let silence_spec = ButtonSpec {
+        x: 12,
+        y: 0,
+        w: 20,
+        h: 3,
+        text: "Remain Silent".to_string(),
+        id: 60,
+    };
+
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &silence_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) {
+        return Some(Silence);
+    }
+
+    //TODO allow player to make claim
+    None
+}
+fn insert_claim(state: &mut State, participant: Participant, claim: Claim) {
+    //TODO update cpu_knowledge
+
+    state.claims.insert(participant, claim);
+}
+fn get_claim_vec(state: &State) -> Vec<(Participant, Claim)> {
+    let mut result: Vec<(Participant, Claim)> = state.claims
+        .iter()
+        .map(|(&p, &c)| (p, c))
+        .collect();
+
+    result.sort();
+
+    result
+}
+fn display_claim(platform: &Platform,
+                 x: i32,
+                 y: i32,
+                 &(participant, claim): &(Participant, Claim)) {
+    if participant == Player {
+        (platform.print_xy)(x,
+                            y,
+                            &format!("You claim that you are a {}", claim.self_claim));
+    } else {
+        (platform.print_xy)(x,
+                            y,
+                            &format!("{} claims that they are a {}",
+                                     participant,
+                                     claim.self_claim));
+    }
+}
+
+fn make_remaining_claims(state: &mut State) {
+    let mut cpu_participants = get_other_participants(state, Player);
+    state.rng.shuffle(&mut cpu_participants);
+    for &participant in cpu_participants.iter() {
+        if !state.claims.contains_key(&participant) {
+            make_cpu_claim(state, participant);
+        }
+    }
+
 }
 
 use std::fmt::Write;
