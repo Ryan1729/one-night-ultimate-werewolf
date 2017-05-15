@@ -54,10 +54,11 @@ impl fmt::Debug for State {
     }
 }
 
-#[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord)]
+#[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord, Hash)]
 pub enum Role {
     Werewolf,
     Robber,
+    Seer,
     Villager,
 }
 use Role::*;
@@ -69,6 +70,7 @@ impl fmt::Display for Role {
                match *self {
                    Werewolf => "a Werewolf",
                    Robber => "a Robber",
+                   Seer => "a Seer",
                    Villager => "a Villager",
                })
     }
@@ -79,6 +81,9 @@ pub enum Turn {
     Ready,
     SeeRole,
     Werewolves,
+    SeerTurn,
+    SeerRevealOne(Participant),
+    SeerRevealTwo(CenterPair),
     RobberTurn,
     RobberReveal,
     BeginDiscussion,
@@ -91,10 +96,13 @@ use Turn::*;
 impl Turn {
     pub fn next(&self) -> Turn {
         match *self {
+            //we only need the (*)Reveal states when the player is the (*)
             Ready => SeeRole,
             SeeRole => Werewolves,
-            Werewolves => RobberTurn,
-            //we only need the RobberReveal state when the player is the robber
+            Werewolves => SeerTurn,
+            SeerTurn => RobberTurn,
+            SeerRevealOne(_) => SeerTurn.next(),
+            SeerRevealTwo(_) => SeerTurn.next(),
             RobberTurn => BeginDiscussion,
             BeginDiscussion => Discuss,
             RobberReveal => RobberTurn.next(),
@@ -102,6 +110,73 @@ impl Turn {
             Vote => Resolution,
             Resolution => Ready,
         }
+    }
+}
+
+#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
+pub enum CenterPair {
+    FirstSecond,
+    FirstThird,
+    SecondThird,
+}
+use CenterPair::*;
+
+impl AllValues for CenterPair {
+    fn all_values() -> Vec<CenterPair> {
+        vec![FirstSecond, FirstThird, SecondThird]
+    }
+}
+
+
+pub trait AllValues {
+    fn all_values() -> Vec<Self> where Self: std::marker::Sized;
+}
+
+use rand::Rand;
+use rand::Rng;
+// impl<T: AllValues + Sized> Rand for T {
+//     fn rand<R: Rng, T>(rng: &mut R) -> T {
+//         let values = T::all_values();
+//
+//         let len = values.len();
+//
+//         if len == 0 {
+//             panic!("Cannot pick a random value because T::all_values()
+//returned an empty vector!")
+//         } else {
+//             let i = rng.gen_range(0, len);
+//
+//             values[i]
+//         }
+//     }
+// }
+
+impl Rand for CenterPair {
+    fn rand<R: Rng>(rng: &mut R) -> Self {
+        let values = Self::all_values();
+
+        let len = values.len();
+
+        if len == 0 {
+            panic!("Cannot pick a random value because T::all_values() returned an empty vector!")
+        } else {
+            let i = rng.gen_range(0, len);
+
+            values[i]
+        }
+    }
+}
+
+impl fmt::Display for CenterPair {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        write!(f,
+               "{}",
+               match *self {
+                   FirstSecond => "First and Second",
+                   FirstThird => "First and Third",
+                   SecondThird => "Second and Third",
+               })
     }
 }
 
@@ -130,6 +205,7 @@ pub struct Knowledge {
     pub known_villagers: HashSet<Participant>,
     pub role: Role,
     pub true_claim: Claim,
+    pub known_non_active: HashSet<Role>,
 }
 
 impl Knowledge {
@@ -139,6 +215,7 @@ impl Knowledge {
             known_villagers: HashSet::new(),
             role,
             true_claim: Simple(role),
+            known_non_active: HashSet::new(),
         }
     }
 }
@@ -147,6 +224,8 @@ impl Knowledge {
 pub enum Claim {
     Simple(Role),
     RobberAction(Participant, Role),
+    SeerRevealOneAction(Participant, Role),
+    SeerRevealTwoAction(CenterPair, Role, Role),
 }
 use Claim::*;
 

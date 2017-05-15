@@ -6,6 +6,7 @@ use common::Role::*;
 use common::Turn::*;
 use common::Participant::*;
 use common::Claim::*;
+use common::CenterPair::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 use std::collections::HashMap;
@@ -62,7 +63,8 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Villager, Villager];
+    let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Villager, Seer];
+
 
     rng.shuffle(&mut roles);
 
@@ -211,6 +213,106 @@ pub fn game_update_and_render(platform: &Platform,
             }
 
         }
+        SeerTurn => {
+            if state.player == Seer {
+                (platform.print_xy)(15,
+                                    3,
+                                    "Seer, wake up.
+You may look at another
+player’s card or two of the center cards.");
+
+
+                let choice =
+                    pick_seer_choice(platform, state, left_mouse_pressed, left_mouse_released);
+                match choice {
+                    SeerCpuOrSkip(cpu_or_skip) => {
+                        match cpu_or_skip {
+
+                            Skip => {
+                                state.turn = state.turn.next();
+                            }
+                            Chosen(chosen) => {
+                                state.turn = SeerRevealOne(chosen);
+                            }
+                            NoChoice => {}
+                        }
+                    }
+                    ChosenPair(chosen) => {
+                        state.turn = SeerRevealTwo(chosen);
+                    }
+                }
+            } else {
+                if let Some(seer_index) = linear_search(&state.cpu_roles, &Seer) {
+                    let seer = Cpu(seer_index);
+                    println!("{}", seer);
+
+                    let look_at_two = state.rng.gen::<bool>();
+
+                    //TODO choose player or center based on active roles?
+                    if look_at_two {
+
+                        let pair = state.rng.gen::<CenterPair>();
+
+                        let (role1, role2) = get_role_pair(state, pair);
+                        if let Some(knowledge) = get_knowledge_mut(state, seer) {
+                            knowledge.known_non_active.insert(role1);
+                            knowledge.known_non_active.insert(role2);
+
+                            knowledge.true_claim = SeerRevealTwoAction(pair, role1, role2);
+                        }
+                    } else {
+                        let other_participants = get_other_participants(state, seer);
+                        if let Some(&chosen) = state.rng.choose(&other_participants) {
+                            if let Some(seen_role) = get_role(state, chosen) {
+                                if let Some(knowledge) = get_knowledge_mut(state, seer) {
+                                    if is_werewolf(seen_role) {
+                                        knowledge.known_villagers.remove(&chosen);
+                                        knowledge.known_werewolves.insert(chosen);
+                                    } else {
+                                        knowledge.known_villagers.insert(chosen);
+                                    };
+
+                                    knowledge.true_claim = SeerRevealOneAction(chosen, seen_role);
+                                }
+                            }
+                        }
+
+                    }
+                }
+
+                state.turn = state.turn.next();
+            };
+        }
+        SeerRevealOne(participant) => {
+            if let Some(role) = get_role(state, participant) {
+                (platform.print_xy)(10, 10, &format!("{} is {}.", participant, role));
+            } else {
+                (platform.print_xy)(10,
+                                    10,
+                                    &format!("{} apparently isn't playing?!", participant));
+            }
+
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            }
+        }
+        SeerRevealTwo(pair) => {
+            let (role1, role2) = get_role_pair(state, pair);
+
+            let (ordinal1, ordinal2) = match pair {
+                FirstSecond => ("First", "Second"),
+                FirstThird => ("First", "Third"),
+                SecondThird => ("Second", "Third"),
+            };
+
+            (platform.print_xy)(10, 10, &format!("The {} card is {}.", ordinal1, role1));
+            (platform.print_xy)(10, 11, &format!("And the {} card is {}.", ordinal2, role2));
+
+
+            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                state.turn = state.turn.next();
+            }
+        }
         RobberTurn => {
             if state.player == Robber {
                 (platform.print_xy)(15,
@@ -220,11 +322,11 @@ You may exchange your card with another player’s card,
 and then view your new card.");
 
 
-                let possible_chosen = pick_cpu_player_or_skip(platform,
-                                                              state,
-                                                              left_mouse_pressed,
-                                                              left_mouse_released);
-                match possible_chosen {
+                let choice = pick_cpu_player_or_skip(platform,
+                                                     state,
+                                                     left_mouse_pressed,
+                                                     left_mouse_released);
+                match choice {
                     Skip => {
                         state.turn = state.turn.next();
                     }
@@ -250,9 +352,9 @@ and then view your new card.");
                             if is_werewolf(new_role) {
                                 knowledge.known_villagers.remove(&robber);
                                 knowledge.known_werewolves.insert(robber);
-                            } else {
-                                knowledge.known_villagers.insert(chosen);
                             };
+
+                            knowledge.known_villagers.insert(chosen);
 
                             knowledge.true_claim = RobberAction(chosen, new_role);
                         }
@@ -432,6 +534,15 @@ and then view your new card.");
     false
 }
 
+fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
+    let rs = state.table_roles;
+    match pair {
+        FirstSecond => (rs[0], rs[1]),
+        FirstThird => (rs[0], rs[2]),
+        SecondThird => (rs[1], rs[2]),
+    }
+}
+
 const MAX_CLAIM_HEIGHT: i32 = 3;
 
 fn get_knowledge(state: &State, participant: Participant) -> Option<&Knowledge> {
@@ -534,6 +645,21 @@ fn display_claim(platform: &Platform,
                                              p,
                                              role));
             }
+            SeerRevealOneAction(p, role) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Seer));
+                (platform.print_xy)(x,
+                                    y + 1,
+                                    &format!("and you looked at {} and they were {}", p, role));
+            }
+            SeerRevealTwoAction(centerpair, role1, role2) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Seer));
+                let message = &format!("and you looked at the {} cards and they were {} and {}",
+                                       centerpair,
+                                       role1,
+                                       role2);
+                (platform.print_xy)(x, y + 1, message);
+            }
+
         }
     } else {
         match claim {
@@ -553,6 +679,24 @@ fn display_claim(platform: &Platform,
                                              p,
                                              pronoun,
                                              role));
+            }
+            SeerRevealOneAction(p, role) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {}", participant, Seer));
+                (platform.print_xy)(x,
+                                    y + 1,
+                                    &format!("and they looked at {} and they were {}", p, role));
+            }
+            SeerRevealTwoAction(centerpair, role1, role2) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {}", participant, Seer));
+                let message = &format!("and they looked at the {} cards and they were {} and {}",
+                                       centerpair,
+                                       role1,
+                                       role2);
+                (platform.print_xy)(x, y + 1, message);
             }
         }
 
@@ -704,6 +848,43 @@ fn pick_cpu_player_or_skip(platform: &Platform,
 
 }
 
+enum SeerChoice {
+    SeerCpuOrSkip(ParticipantOrSkip),
+    ChosenPair(CenterPair),
+}
+use SeerChoice::*;
+
+
+fn pick_seer_choice(platform: &Platform,
+                    state: &mut State,
+                    left_mouse_pressed: bool,
+                    left_mouse_released: bool)
+                    -> SeerChoice {
+
+    let all_pairs = CenterPair::all_values();
+    for index in 0..all_pairs.len() {
+        let i = index as i32;
+        let pair = all_pairs[index];
+        if do_button(platform,
+                     &mut state.ui_context,
+                     &ButtonSpec {
+                          x: 0,
+                          y: 12 + (i * 4),
+                          w: 20,
+                          h: 3,
+                          text: pair.to_string(),
+                          id: 72 + i,
+                      },
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            return ChosenPair(pair);
+        }
+
+    }
+
+    SeerCpuOrSkip(pick_cpu_player_or_skip(platform, state, left_mouse_pressed, left_mouse_released))
+}
+
 pub enum ParticipantOrSkip {
     Skip,
     Chosen(Participant),
@@ -782,6 +963,8 @@ fn get_vote(participant: Participant,
     if let Some(&p) = rng.choose(&filtered) {
         return p;
     }
+
+    //TODO do process of elimination with known_non_active. (can this happen earlier?)
 
     //vote clockwise
     println!("clockwise : {}", participant);
