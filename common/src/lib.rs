@@ -4,6 +4,7 @@ use std::fmt;
 
 use rand::StdRng;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 pub struct Platform {
     pub print_xy: fn(i32, i32, &str),
@@ -63,7 +64,13 @@ use Role::*;
 
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", *self)
+        write!(f,
+               "{}",
+               match *self {
+                   Werewolf => "a Werewolf",
+                   Robber => "a Robber",
+                   Villager => "a Villager",
+               })
     }
 }
 
@@ -119,26 +126,29 @@ impl fmt::Display for Participant {
 
 #[derive(Debug)]
 pub struct Knowledge {
-    pub known_werewolves: Vec<Participant>,
-    pub known_villagers: Vec<Participant>,
+    pub known_werewolves: HashSet<Participant>,
+    pub known_villagers: HashSet<Participant>,
     pub role: Role,
+    pub true_claim: Claim,
 }
 
 impl Knowledge {
     pub fn new(role: Role) -> Self {
         Knowledge {
-            known_werewolves: Vec::new(),
-            known_villagers: Vec::new(),
+            known_werewolves: HashSet::new(),
+            known_villagers: HashSet::new(),
             role,
+            true_claim: Simple(role),
         }
     }
 }
 
-#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy)]
-pub struct Claim {
-    pub self_claim: Role,
-    //TODO represent robber action etc
+#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
+pub enum Claim {
+    Simple(Role),
+    RobberAction(Participant, Role),
 }
+use Claim::*;
 
 pub type UiId = i32;
 

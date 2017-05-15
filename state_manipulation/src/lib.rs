@@ -5,6 +5,7 @@ use common::*;
 use common::Role::*;
 use common::Turn::*;
 use common::Participant::*;
+use common::Claim::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 use std::collections::HashMap;
@@ -164,7 +165,7 @@ pub fn game_update_and_render(platform: &Platform,
             };
         }
         SeeRole => {
-            (platform.print_xy)(10, 12, &format!("You are a {}.", state.player));
+            (platform.print_xy)(10, 12, &format!("You are {}.", state.player));
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 state.turn = state.turn.next();
@@ -196,12 +197,12 @@ pub fn game_update_and_render(platform: &Platform,
                 for &werewolf in werewolves.iter() {
                     match werewolf {
                         Player => {
-                            state.player_knowledge.known_werewolves.extend_from_slice(&werewolves);
+                            state.player_knowledge.known_werewolves.extend(werewolves.iter());
                         }
                         Cpu(index) => {
                             let ref mut knowledge = state.cpu_knowledge[index];
 
-                            knowledge.known_werewolves.extend_from_slice(&werewolves);
+                            knowledge.known_werewolves.extend(werewolves.iter());
                         }
                     }
                 }
@@ -242,7 +243,19 @@ and then view your new card.");
                     if let Some(&chosen) = state.rng.choose(&other_participants) {
                         swap_roles(state, robber, chosen);
 
-                        //TODO update robber knowledge
+                        if let (Some(new_role), Some(knowledge)) =
+                            (get_role(state, robber), get_knowledge_mut(state, robber)) {
+
+                            knowledge.role = new_role;
+                            if is_werewolf(new_role) {
+                                knowledge.known_villagers.remove(&robber);
+                                knowledge.known_werewolves.insert(robber);
+                            } else {
+                                knowledge.known_villagers.insert(chosen);
+                            };
+
+                            knowledge.true_claim = RobberAction(chosen, new_role);
+                        }
                     }
                 }
 
@@ -265,7 +278,7 @@ and then view your new card.");
                 let first_speaker_count = state.rng.gen_range(0, len);
 
                 state.rng.shuffle(&mut first_speakers);
-                for i in 0..first_speaker_count {
+                for _ in 0..first_speaker_count {
                     if let Some(participant) = first_speakers.pop() {
                         make_cpu_claim(state, participant);
                     }
@@ -395,12 +408,12 @@ and then view your new card.");
             }
 
 
-            (platform.print_xy)(10, 20, &format!("You are a {}", state.player));
+            (platform.print_xy)(10, 20, &format!("You are {}", state.player));
 
             for i in 0..state.cpu_roles.len() {
                 (platform.print_xy)(10,
                                     21 + i as i32,
-                                    &format!("{} is a {}", Cpu(i), state.cpu_roles[i]));
+                                    &format!("{} is {}", Cpu(i), state.cpu_roles[i]));
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -427,22 +440,34 @@ fn get_knowledge(state: &State, participant: Participant) -> Option<&Knowledge> 
         Cpu(index) => state.cpu_knowledge.get(index),
     }
 }
+fn get_knowledge_mut(state: &mut State, participant: Participant) -> Option<&mut Knowledge> {
+    match participant {
+        Player => Some(&mut state.player_knowledge),
+        Cpu(index) => state.cpu_knowledge.get_mut(index),
+    }
+}
 fn make_cpu_claim(state: &mut State, participant: Participant) {
     if participant == Player {
         return;
     }
 
-    if let Some(role) = get_knowledge(state, participant).map(|k| k.role) {
-        let claim = if is_werewolf(role) {
-            //TODO better lying
-            Claim { self_claim: Villager }
+    let possible_claim = if let Some(knowledge) = get_knowledge(state, participant) {
 
+        let claim = if is_werewolf(knowledge.role) {
+            //TODO better lying
+            Simple(Villager)
         } else {
-            Claim { self_claim: role }
+            knowledge.true_claim
         };
 
-        insert_claim(state, participant, claim);
+        Some(claim)
+    } else {
+        None
     };
+
+    if let Some(claim) = possible_claim {
+        insert_claim(state, participant, claim);
+    }
 }
 
 enum ClaimOrSilence {
@@ -497,15 +522,40 @@ fn display_claim(platform: &Platform,
                  y: i32,
                  &(participant, claim): &(Participant, Claim)) {
     if participant == Player {
-        (platform.print_xy)(x,
-                            y,
-                            &format!("You claim that you are a {}", claim.self_claim));
+        match claim {
+            Simple(role) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", role));
+            }
+            RobberAction(p, role) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Robber));
+                (platform.print_xy)(x,
+                                    y + 1,
+                                    &format!("and you swapped roles with {} and they were {}",
+                                             p,
+                                             role));
+            }
+        }
     } else {
-        (platform.print_xy)(x,
-                            y,
-                            &format!("{} claims that they are a {}",
-                                     participant,
-                                     claim.self_claim));
+        match claim {
+            Simple(role) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {}", participant, role));
+            }
+            RobberAction(p, role) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {}", participant, Robber));
+                let pronoun = if p == Player { "You" } else { "they" };
+                (platform.print_xy)(x,
+                                    y + 1,
+                                    &format!("and they swapped roles with {} and {} were {}",
+                                             p,
+                                             pronoun,
+                                             role));
+            }
+        }
+
     }
 }
 
@@ -699,8 +749,13 @@ fn get_vote(participant: Participant,
             knowledge: &Knowledge,
             rng: &mut StdRng)
             -> Participant {
-    let filterd: Vec<Participant> = if is_werewolf(knowledge.role) {
-        if let Some(&villager) = rng.choose(&knowledge.known_villagers) {
+    let filtered: Vec<Participant> = if is_werewolf(knowledge.role) {
+        let mut vec: Vec<Participant> = knowledge.known_villagers
+            .iter()
+            .map(|&p| p)
+            .collect();
+        vec.sort();
+        if let Some(&villager) = rng.choose(&vec) {
             return villager;
         }
 
@@ -709,7 +764,12 @@ fn get_vote(participant: Participant,
             .map(|&p| p)
             .collect()
     } else {
-        if let Some(&werewolf) = rng.choose(&knowledge.known_werewolves) {
+        let mut vec: Vec<Participant> = knowledge.known_werewolves
+            .iter()
+            .map(|&p| p)
+            .collect();
+        vec.sort();
+        if let Some(&werewolf) = rng.choose(&vec) {
             return werewolf;
         }
 
@@ -719,8 +779,7 @@ fn get_vote(participant: Participant,
             .collect()
     };
 
-
-    if let Some(&p) = rng.choose(&filterd) {
+    if let Some(&p) = rng.choose(&filtered) {
         return p;
     }
 
