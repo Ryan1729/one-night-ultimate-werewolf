@@ -41,6 +41,26 @@ pub fn new_state(size: Size) -> State {
 
 
 fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
+    let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge) =
+        get_roles_and_knowledge(&mut rng);
+
+    State {
+        rng: rng,
+        title_screen: title_screen,
+        player,
+        cpu_roles,
+        table_roles,
+        turn: Ready,
+        player_knowledge,
+        cpu_knowledge,
+        votes: Vec::new(),
+        claims: HashMap::new(),
+        ui_context: UIContext::new(),
+    }
+}
+
+fn get_roles_and_knowledge(rng: &mut StdRng)
+                           -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
     let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Villager, Villager];
 
     rng.shuffle(&mut roles);
@@ -51,21 +71,11 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
     let cpu_roles = roles;
 
+    let player_knowledge = Knowledge::new(player);
+
     let cpu_knowledge = cpu_roles.iter().map(|&role| Knowledge::new(role)).collect();
 
-    State {
-        rng: rng,
-        title_screen: title_screen,
-        player,
-        cpu_roles,
-        table_roles,
-        turn: Ready,
-        player_knowledge: Knowledge::new(player),
-        cpu_knowledge,
-        votes: Vec::new(),
-        claims: HashMap::new(),
-        ui_context: UIContext::new(),
-    }
+    (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge)
 }
 
 #[no_mangle]
@@ -140,6 +150,16 @@ pub fn game_update_and_render(platform: &Platform,
             //TODO pick roles and number of players
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge) =
+                    get_roles_and_knowledge(&mut state.rng);
+
+                state.player = player;
+                state.cpu_roles = cpu_roles;
+                state.table_roles = table_roles;
+                state.player_knowledge = player_knowledge;
+                state.cpu_knowledge = cpu_knowledge;
+
+
                 state.turn = state.turn.next();
             };
         }
@@ -221,6 +241,8 @@ and then view your new card.");
                     let other_participants = get_other_participants(state, robber);
                     if let Some(&chosen) = state.rng.choose(&other_participants) {
                         swap_roles(state, robber, chosen);
+
+                        //TODO update robber knowledge
                     }
                 }
 
@@ -703,6 +725,7 @@ fn get_vote(participant: Participant,
     }
 
     //vote clockwise
+    println!("clockwise : {}", participant);
     *(match participant {
               Player => participants.get(0),
               Cpu(i) => participants.get(i + 1),
