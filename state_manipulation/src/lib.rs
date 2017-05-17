@@ -353,14 +353,6 @@ and then view your new card.");
                         if let (Some(new_role), Some(knowledge)) =
                             (get_role(state, robber), get_knowledge_mut(state, robber)) {
 
-                            knowledge.role = new_role;
-                            if is_werewolf(new_role) {
-                                knowledge.known_villagers.remove(&robber);
-                                knowledge.known_werewolves.insert(robber);
-                            };
-
-                            knowledge.known_villagers.insert(chosen);
-
                             knowledge.true_claim = RobberAction(chosen, new_role);
                             knowledge.robber_swap = Some((robber, chosen, new_role));
                         }
@@ -622,13 +614,16 @@ and then view your new card.");
 fn apply_swaps(knowledge: &mut Knowledge) {
     //TODO maybe make this return a new type, "FinalKnowledge"?
     if let Some((robber, target, previous_role)) = knowledge.robber_swap {
+        knowledge.role = previous_role;
         if is_werewolf(previous_role) {
-            knowledge.known_werewolves.insert(robber);
             knowledge.known_villagers.remove(&robber);
+            knowledge.known_werewolves.insert(robber);
 
-            knowledge.known_villagers.insert(target);
-            knowledge.known_werewolves.remove(&target);
-        }
+        };
+
+        knowledge.known_werewolves.remove(&target);
+        knowledge.known_villagers.insert(target);
+
     }
 
     if let Some((target1, target2)) = knowledge.troublemaker_swap {
