@@ -46,11 +46,15 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
     let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge) =
         get_roles_and_knowledge(&mut rng);
 
+    let initial_cpu_roles = cpu_roles.to_owned();
+
     State {
         rng: rng,
         title_screen: title_screen,
         player,
+        initial_player: player,
         cpu_roles,
+        initial_cpu_roles,
         table_roles,
         turn: Ready,
         player_knowledge,
@@ -156,6 +160,8 @@ pub fn game_update_and_render(platform: &Platform,
                     get_roles_and_knowledge(&mut state.rng);
 
                 state.player = player;
+                state.initial_player = player;
+                state.initial_cpu_roles = cpu_roles.to_owned();
                 state.cpu_roles = cpu_roles;
                 state.table_roles = table_roles;
                 state.player_knowledge = player_knowledge;
@@ -313,7 +319,7 @@ player’s card or two of the center cards.");
             }
         }
         RobberTurn => {
-            if state.player == Robber {
+            if state.initial_player == Robber {
                 (platform.print_xy)(15,
                                     3,
                                     "Robber, wake up.
@@ -337,7 +343,7 @@ and then view your new card.");
                     NoChoice => {}
                 }
             } else {
-                if let Some(robber_index) = linear_search(&state.cpu_roles, &Robber) {
+                if let Some(robber_index) = linear_search(&state.initial_cpu_roles, &Robber) {
                     let robber = Cpu(robber_index);
 
                     let other_participants = get_other_participants(state, robber);
@@ -372,7 +378,7 @@ and then view your new card.");
             }
         }
         TroublemakerTurn => {
-            if state.player == Troublemaker {
+            if state.initial_player == Troublemaker {
                 (platform.print_xy)(15,
                                     3,
                                     "Troublemaker, wake up.
@@ -395,7 +401,8 @@ and then view your new card.");
                     NoChoice => {}
                 }
             } else {
-                if let Some(troublemaker_index) = linear_search(&state.cpu_roles, &Troublemaker) {
+                if let Some(troublemaker_index) =
+                    linear_search(&state.initial_cpu_roles, &Troublemaker) {
                     let troublemaker = Cpu(troublemaker_index);
 
                     let mut other_participants = get_other_participants(state, troublemaker);
@@ -418,7 +425,7 @@ and then view your new card.");
         TroublemakerSecondChoice(first_choice) => {
             (platform.print_xy)(15, 5, "Choose the second other player:");
 
-            let remining_options = get_cpu_participants(state)
+            let remaining_options = get_cpu_participants(state)
                 .iter()
                 .filter(|&&p| p != first_choice)
                 .map(|&p| p)
@@ -428,7 +435,7 @@ and then view your new card.");
                                 state,
                                 left_mouse_pressed,
                                 left_mouse_released,
-                                &remining_options) {
+                                &remaining_options) {
                 swap_roles(state, first_choice, second_choice);
                 state.player_knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
             };
@@ -510,6 +517,8 @@ and then view your new card.");
 
                 for i in 0..state.cpu_knowledge.len() {
                     let voter = Cpu(i);
+
+                    apply_swaps(&mut state.cpu_knowledge[i]);
 
                     let vote = get_vote(voter,
                                         get_participants(state),
@@ -608,6 +617,24 @@ and then view your new card.");
     draw(platform, state);
 
     false
+}
+
+fn apply_swaps(knowledge: &mut Knowledge) {
+    //TODO maybe make this return a new type, "FinalKnowledge"?
+    if let Some((robber, target, previous_role)) = knowledge.robber_swap {
+        if is_werewolf(previous_role) {
+            knowledge.known_werewolves.insert(robber);
+            knowledge.known_villagers.remove(&robber);
+
+            knowledge.known_villagers.insert(target);
+            knowledge.known_werewolves.remove(&target);
+        }
+    }
+
+    if let Some((target1, target2)) = knowledge.troublemaker_swap {
+        swap_team_if_known(knowledge, target1);
+        swap_team_if_known(knowledge, target2);
+    }
 }
 
 fn swap_team_if_known(knowledge: &mut Knowledge, participant: Participant) {

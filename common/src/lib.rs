@@ -28,7 +28,9 @@ pub struct State {
     pub rng: StdRng,
     pub title_screen: bool,
     pub player: Role,
+    pub initial_player: Role,
     pub cpu_roles: Vec<Role>,
+    pub initial_cpu_roles: Vec<Role>,
     pub table_roles: [Role; 3],
     pub turn: Turn,
     pub player_knowledge: Knowledge,
@@ -195,6 +197,8 @@ pub struct Knowledge {
     pub role: Role,
     pub true_claim: Claim,
     pub known_non_active: HashSet<Role>,
+    pub robber_swap: Option<(Participant, Participant, Role)>,
+    pub troublemaker_swap: Option<(Participant, Participant)>,
 }
 
 impl Knowledge {
@@ -205,6 +209,8 @@ impl Knowledge {
             role,
             true_claim: Simple(role),
             known_non_active: HashSet::new(),
+            robber_swap: None,
+            troublemaker_swap: None,
         }
     }
 }
