@@ -63,8 +63,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Villager, Seer];
-
+    let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Troublemaker, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -357,6 +356,7 @@ and then view your new card.");
                             knowledge.known_villagers.insert(chosen);
 
                             knowledge.true_claim = RobberAction(chosen, new_role);
+                            knowledge.robber_swap = Some((robber, chosen, new_role));
                         }
                     }
                 }
@@ -369,6 +369,82 @@ and then view your new card.");
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 state.turn = state.turn.next();
+            }
+        }
+        TroublemakerTurn => {
+            if state.player == Troublemaker {
+                (platform.print_xy)(15,
+                                    3,
+                                    "Troublemaker, wake up.
+ You may exchange cards between two other players.");
+
+                (platform.print_xy)(15, 5, "Choose the first other player:");
+
+
+                let choice = pick_cpu_player_or_skip(platform,
+                                                     state,
+                                                     left_mouse_pressed,
+                                                     left_mouse_released);
+                match choice {
+                    Skip => {
+                        state.turn = state.turn.next();
+                    }
+                    Chosen(chosen) => {
+                        state.turn = TroublemakerSecondChoice(chosen);
+                    }
+                    NoChoice => {}
+                }
+            } else {
+                if let Some(troublemaker_index) = linear_search(&state.cpu_roles, &Troublemaker) {
+                    let troublemaker = Cpu(troublemaker_index);
+
+                    let mut other_participants = get_other_participants(state, troublemaker);
+                    state.rng.shuffle(&mut other_participants);
+
+                    if let (Some(first_choice), Some(second_choice)) =
+                        (other_participants.pop(), other_participants.pop()) {
+                        swap_roles(state, first_choice, second_choice);
+
+                        if let Some(knowledge) = get_knowledge_mut(state, troublemaker) {
+                            knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
+                            knowledge.troublemaker_swap = Some((first_choice, second_choice));
+                        }
+                    }
+                }
+
+                state.turn = state.turn.next();
+            };
+        }
+        TroublemakerSecondChoice(first_choice) => {
+            (platform.print_xy)(15, 5, "Choose the second other player:");
+
+            let remining_options = get_cpu_participants(state)
+                .iter()
+                .filter(|&&p| p != first_choice)
+                .map(|&p| p)
+                .collect();
+            if let Some(second_choice) =
+                pick_particpant(platform,
+                                state,
+                                left_mouse_pressed,
+                                left_mouse_released,
+                                &remining_options) {
+                swap_roles(state, first_choice, second_choice);
+                state.player_knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
+            };
+            if do_button(platform,
+                         &mut state.ui_context,
+                         &ButtonSpec {
+                              x: 0,
+                              y: 8,
+                              w: 11,
+                              h: 3,
+                              text: "Back".to_string(),
+                              id: 11,
+                          },
+                         left_mouse_pressed,
+                         left_mouse_released) {
+                state.turn = TroublemakerTurn;
             }
         }
         BeginDiscussion => {
@@ -534,6 +610,16 @@ and then view your new card.");
     false
 }
 
+fn swap_team_if_known(knowledge: &mut Knowledge, participant: Participant) {
+    if knowledge.known_werewolves.contains(&participant) {
+        knowledge.known_villagers.insert(participant);
+        knowledge.known_werewolves.remove(&participant);
+    } else if knowledge.known_villagers.contains(&participant) {
+        knowledge.known_werewolves.insert(participant);
+        knowledge.known_villagers.remove(&participant);
+    }
+}
+
 fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
     let rs = state.table_roles;
     match pair {
@@ -566,8 +652,10 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
 
         let claim = if is_werewolf(knowledge.role) {
             //TODO better lying
+            //equal probability of all plausible possibilities?
             Simple(Villager)
         } else {
+            //TODO occasionally lying while a villager
             knowledge.true_claim
         };
 
@@ -615,6 +703,9 @@ fn get_player_claim_or_silence(platform: &Platform,
 }
 fn insert_claim(state: &mut State, participant: Participant, claim: Claim) {
     //TODO update cpu_knowledge
+    //for example, if someone claims to be the seer and their claim about
+    //who someone is matches what you know, then most likely they are the
+    //seer, and didn't just guess luckily
 
     state.claims.insert(participant, claim);
 }
@@ -659,7 +750,11 @@ fn display_claim(platform: &Platform,
                                        role2);
                 (platform.print_xy)(x, y + 1, message);
             }
-
+            TroublemakerAction(p1, p2) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Troublemaker));
+                let message = &format!("and you swapeed the roles of {} and {}.", p1, p2);
+                (platform.print_xy)(x, y + 1, message);
+            }
         }
     } else {
         match claim {
@@ -684,9 +779,13 @@ fn display_claim(platform: &Platform,
                 (platform.print_xy)(x,
                                     y,
                                     &format!("{} claims that they are {}", participant, Seer));
+                let pronoun = if p == Player { "You" } else { "they" };
                 (platform.print_xy)(x,
                                     y + 1,
-                                    &format!("and they looked at {} and they were {}", p, role));
+                                    &format!("and they looked at {} and {} were {}",
+                                             p,
+                                             pronoun,
+                                             role));
             }
             SeerRevealTwoAction(centerpair, role1, role2) => {
                 (platform.print_xy)(x,
@@ -696,6 +795,18 @@ fn display_claim(platform: &Platform,
                                        centerpair,
                                        role1,
                                        role2);
+                (platform.print_xy)(x, y + 1, message);
+            }
+            TroublemakerAction(p1, p2) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {}",
+                                             participant,
+                                             Troublemaker));
+                let message = &format!("and they swapeed the roles of the following two players:
+    {} and {}.",
+                                       p1,
+                                       p2);
                 (platform.print_xy)(x, y + 1, message);
             }
         }
@@ -897,18 +1008,33 @@ fn pick_cpu_player(platform: &Platform,
                    left_mouse_pressed: bool,
                    left_mouse_released: bool)
                    -> Option<Participant> {
+    let cpu_participants = get_cpu_participants(state);
+
+    pick_particpant(platform,
+                    state,
+                    left_mouse_pressed,
+                    left_mouse_released,
+                    &cpu_participants)
+}
+
+fn pick_particpant(platform: &Platform,
+                   state: &mut State,
+                   left_mouse_pressed: bool,
+                   left_mouse_released: bool,
+                   participants: &Vec<Participant>)
+                   -> Option<Participant> {
     let size = (platform.size)();
 
-    for i in 0..state.cpu_roles.len() {
+    for i in 0..participants.len() {
         let index = i as i32;
-        let cpu_player = Cpu(i);
+        let participants = participants[i];
 
         let spec = ButtonSpec {
             x: (size.width / 2) - 6,
             y: (index + 2) * 4,
             w: 11,
             h: 3,
-            text: cpu_player.to_string(),
+            text: participants.to_string(),
             id: 12 + index,
         };
 
@@ -917,12 +1043,22 @@ fn pick_cpu_player(platform: &Platform,
                      &spec,
                      left_mouse_pressed,
                      left_mouse_released) {
-            return Some(cpu_player);
+            return Some(participants);
         }
 
     }
 
     None
+}
+
+fn get_cpu_participants(state: &State) -> Vec<Participant> {
+    let mut result = Vec::new();
+
+    for i in 0..state.cpu_roles.len() {
+        result.push(Cpu(i));
+    }
+
+    result
 }
 
 fn get_vote(participant: Participant,

@@ -59,6 +59,7 @@ pub enum Role {
     Werewolf,
     Robber,
     Seer,
+    Troublemaker,
     Villager,
 }
 use Role::*;
@@ -71,6 +72,7 @@ impl fmt::Display for Role {
                    Werewolf => "a Werewolf",
                    Robber => "a Robber",
                    Seer => "a Seer",
+                   Troublemaker => "a Troublemaker",
                    Villager => "a Villager",
                })
     }
@@ -86,6 +88,8 @@ pub enum Turn {
     SeerRevealTwo(CenterPair),
     RobberTurn,
     RobberReveal,
+    TroublemakerTurn,
+    TroublemakerSecondChoice(Participant),
     BeginDiscussion,
     Discuss,
     Vote,
@@ -103,7 +107,9 @@ impl Turn {
             SeerTurn => RobberTurn,
             SeerRevealOne(_) => SeerTurn.next(),
             SeerRevealTwo(_) => SeerTurn.next(),
-            RobberTurn => BeginDiscussion,
+            RobberTurn => TroublemakerTurn,
+            TroublemakerSecondChoice(_) => TroublemakerTurn.next(),
+            TroublemakerTurn => BeginDiscussion,
             BeginDiscussion => Discuss,
             RobberReveal => RobberTurn.next(),
             Discuss => Vote,
@@ -134,23 +140,6 @@ pub trait AllValues {
 
 use rand::Rand;
 use rand::Rng;
-// impl<T: AllValues + Sized> Rand for T {
-//     fn rand<R: Rng, T>(rng: &mut R) -> T {
-//         let values = T::all_values();
-//
-//         let len = values.len();
-//
-//         if len == 0 {
-//             panic!("Cannot pick a random value because T::all_values()
-//returned an empty vector!")
-//         } else {
-//             let i = rng.gen_range(0, len);
-//
-//             values[i]
-//         }
-//     }
-// }
-
 impl Rand for CenterPair {
     fn rand<R: Rng>(rng: &mut R) -> Self {
         let values = Self::all_values();
@@ -226,6 +215,7 @@ pub enum Claim {
     RobberAction(Participant, Role),
     SeerRevealOneAction(Participant, Role),
     SeerRevealTwoAction(CenterPair, Role, Role),
+    TroublemakerAction(Participant, Participant),
 }
 use Claim::*;
 
