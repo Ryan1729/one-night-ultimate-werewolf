@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Werewolf, Robber, Villager, Troublemaker, Seer];
+    let mut roles = vec![Werewolf, Robber, Mason, Troublemaker, Mason, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -218,6 +218,66 @@ pub fn game_update_and_render(platform: &Platform,
             }
 
         }
+        MasonTurn => {
+            let masons = get_masons(state);
+
+            let ready = if state.player == Mason {
+                (platform.print_xy)(10, 10, "Masons, wake up and look for other Masons.");
+
+                for i in 0..masons.len() {
+                    let index = i as i32;
+
+                    match masons[i] {
+                        Player => (platform.print_xy)(10, 12 + index, "You are a mason. (duh!)"),
+                        cpu => (platform.print_xy)(10, 12 + index, &format!("{} is a mason.", cpu)),
+                    }
+                }
+
+                ready_button(platform, state, left_mouse_pressed, left_mouse_released)
+            } else {
+                true
+            };
+
+            if ready {
+                for &mason in masons.iter() {
+                    println!("mason {}", mason);
+                    let mut other_masons: Vec<Participant> = masons.iter()
+                        .filter(|&&p| p != mason)
+                        .map(|&p| p)
+                        .collect();
+
+                    let len = other_masons.len();
+
+                    let claim = MasonAction(other_masons.pop());
+
+                    match mason {
+                        Player => {
+                            if len == 0 {
+                                state.player_knowledge.known_non_active.insert(Mason);
+                            } else {
+                                state.player_knowledge.known_villagers.extend(masons.iter());
+                            }
+
+                            state.player_knowledge.true_claim = claim;
+                        }
+                        Cpu(index) => {
+                            let ref mut knowledge = state.cpu_knowledge[index];
+                            println!("pre {:?}", knowledge.known_villagers);
+                            if len == 0 {
+                                knowledge.known_non_active.insert(Mason);
+                            } else {
+                                knowledge.known_villagers.extend(masons.iter());
+                            }
+                            println!("post {:?}", knowledge.known_villagers);
+
+                            knowledge.true_claim = claim;
+                        }
+                    }
+                }
+
+                state.turn = state.turn.next();
+            }
+        }
         SeerTurn => {
             if state.player == Seer {
                 (platform.print_xy)(15,
@@ -363,7 +423,7 @@ and then view your new card.");
             };
         }
         RobberReveal => {
-            (platform.print_xy)(10, 10, &format!("You are now a {}.", state.player));
+            (platform.print_xy)(10, 10, &format!("You are now {}.", state.player));
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 state.turn = state.turn.next();
@@ -642,6 +702,8 @@ fn swap_team_if_known(knowledge: &mut Knowledge, participant: Participant) {
     }
 }
 
+
+
 fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
     let rs = state.table_roles;
     match pair {
@@ -750,6 +812,19 @@ fn display_claim(platform: &Platform,
             Simple(role) => {
                 (platform.print_xy)(x, y, &format!("You claim that you are {}", role));
             }
+            MasonAction(Some(other_mason)) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("You claim that you are {} and so is {}",
+                                             Mason,
+                                             other_mason));
+            }
+            MasonAction(None) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("You claim that you are {} but no one else is",
+                                             Mason));
+            }
             RobberAction(p, role) => {
                 (platform.print_xy)(x, y, &format!("You claim that you are {}", Robber));
                 (platform.print_xy)(x,
@@ -785,6 +860,24 @@ fn display_claim(platform: &Platform,
                                     y,
                                     &format!("{} claims that they are {}", participant, role));
             }
+            MasonAction(Some(other_mason)) => {
+                let verb_form = if other_mason == Player { "are" } else { "is" };
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {} and so {} {}",
+                                             participant,
+                                             Mason,
+                                             verb_form,
+                                             other_mason));
+            }
+            MasonAction(None) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claims that they are {} but no one else is",
+                                             participant,
+                                             Mason));
+            }
+
             RobberAction(p, role) => {
                 (platform.print_xy)(x,
                                     y,
@@ -1142,6 +1235,22 @@ fn get_werewolves(state: &State) -> Vec<Participant> {
 
     for i in 0..state.cpu_roles.len() {
         if state.cpu_roles[i] == Werewolf {
+            result.push(Cpu(i));
+        }
+    }
+
+    result
+}
+
+fn get_masons(state: &State) -> Vec<Participant> {
+    let mut result = Vec::new();
+
+    if state.player == Mason {
+        result.push(Player);
+    }
+
+    for i in 0..state.cpu_roles.len() {
+        if state.cpu_roles[i] == Mason {
             result.push(Cpu(i));
         }
     }

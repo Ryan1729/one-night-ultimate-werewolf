@@ -60,6 +60,7 @@ impl fmt::Debug for State {
 pub enum Role {
     Werewolf,
     Robber,
+    Mason,
     Seer,
     Troublemaker,
     Villager,
@@ -72,6 +73,7 @@ impl fmt::Display for Role {
                "{}",
                match *self {
                    Werewolf => "a Werewolf",
+                   Mason => "a Mason",
                    Robber => "a Robber",
                    Seer => "a Seer",
                    Troublemaker => "a Troublemaker",
@@ -85,6 +87,7 @@ pub enum Turn {
     Ready,
     SeeRole,
     Werewolves,
+    MasonTurn,
     SeerTurn,
     SeerRevealOne(Participant),
     SeerRevealTwo(CenterPair),
@@ -105,7 +108,8 @@ impl Turn {
             //we only need the (*)Reveal states when the player is the (*)
             Ready => SeeRole,
             SeeRole => Werewolves,
-            Werewolves => SeerTurn,
+            Werewolves => MasonTurn,
+            MasonTurn => SeerTurn,
             SeerTurn => RobberTurn,
             SeerRevealOne(_) => SeerTurn.next(),
             SeerRevealTwo(_) => SeerTurn.next(),
@@ -218,6 +222,7 @@ impl Knowledge {
 #[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
 pub enum Claim {
     Simple(Role),
+    MasonAction(Option<Participant>),
     RobberAction(Participant, Role),
     SeerRevealOneAction(Participant, Role),
     SeerRevealTwoAction(CenterPair, Role, Role),
