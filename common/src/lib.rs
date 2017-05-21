@@ -63,6 +63,7 @@ pub enum Role {
     Mason,
     Seer,
     Troublemaker,
+    Insomniac,
     Villager,
 }
 use Role::*;
@@ -77,6 +78,7 @@ impl fmt::Display for Role {
                    Robber => "a Robber",
                    Seer => "a Seer",
                    Troublemaker => "a Troublemaker",
+                   Insomniac => "an Insomniac",
                    Villager => "a Villager",
                })
     }
@@ -95,6 +97,7 @@ pub enum Turn {
     RobberReveal,
     TroublemakerTurn,
     TroublemakerSecondChoice(Participant),
+    InsomniacTurn,
     BeginDiscussion,
     Discuss,
     Vote,
@@ -114,10 +117,11 @@ impl Turn {
             SeerRevealOne(_) => SeerTurn.next(),
             SeerRevealTwo(_) => SeerTurn.next(),
             RobberTurn => TroublemakerTurn,
-            TroublemakerSecondChoice(_) => TroublemakerTurn.next(),
-            TroublemakerTurn => BeginDiscussion,
-            BeginDiscussion => Discuss,
             RobberReveal => RobberTurn.next(),
+            TroublemakerSecondChoice(_) => TroublemakerTurn.next(),
+            TroublemakerTurn => InsomniacTurn,
+            InsomniacTurn => BeginDiscussion,
+            BeginDiscussion => Discuss,
             Discuss => Vote,
             Vote => Resolution,
             Resolution => Ready,
@@ -203,6 +207,7 @@ pub struct Knowledge {
     pub known_non_active: HashSet<Role>,
     pub robber_swap: Option<(Participant, Participant, Role)>,
     pub troublemaker_swap: Option<(Participant, Participant)>,
+    pub insomniac_peek: bool,
 }
 
 impl Knowledge {
@@ -215,6 +220,7 @@ impl Knowledge {
             known_non_active: HashSet::new(),
             robber_swap: None,
             troublemaker_swap: None,
+            insomniac_peek: false,
         }
     }
 }
@@ -227,6 +233,7 @@ pub enum Claim {
     SeerRevealOneAction(Participant, Role),
     SeerRevealTwoAction(CenterPair, Role, Role),
     TroublemakerAction(Participant, Participant),
+    InsomniacAction(Role),
 }
 use Claim::*;
 

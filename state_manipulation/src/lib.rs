@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Robber, Mason, Troublemaker, Mason, Seer];
+    let mut roles = vec![Werewolf, Robber, Werewolf, Troublemaker, Insomniac, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -490,6 +490,8 @@ and then view your new card.");
                                 &remaining_options) {
                 swap_roles(state, first_choice, second_choice);
                 state.player_knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
+
+                state.turn = state.turn.next();
             };
             if do_button(platform,
                          &mut state.ui_context,
@@ -504,6 +506,30 @@ and then view your new card.");
                          left_mouse_pressed,
                          left_mouse_released) {
                 state.turn = TroublemakerTurn;
+            }
+        }
+        InsomniacTurn => {
+            if state.initial_player == Insomniac {
+                (platform.print_xy)(15, 3, "Insomniac, wake up and look at your card.");
+
+                (platform.print_xy)(15, 5, &format!("You are {}", state.player));
+                state.player_knowledge.true_claim = InsomniacAction(state.player);
+
+                if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+                    state.turn = state.turn.next();
+                }
+            } else {
+                if let Some(i) = linear_search(&state.initial_cpu_roles, &Insomniac) {
+                    let knowledge = &mut state.cpu_knowledge[i];
+                    knowledge.insomniac_peek = true;
+
+                    if let Some(&role) = state.cpu_roles.get(i) {
+                        knowledge.true_claim = InsomniacAction(role);
+                        knowledge.role = role;
+                    }
+                }
+
+                state.turn = state.turn.next();
             }
         }
         BeginDiscussion => {
@@ -570,7 +596,26 @@ and then view your new card.");
                 for i in 0..state.cpu_knowledge.len() {
                     let voter = Cpu(i);
 
-                    apply_swaps(&mut state.cpu_knowledge[i]);
+                    let insomniac_peek = {
+                        let knowledge = &mut state.cpu_knowledge[i];
+
+                        apply_swaps(knowledge);
+
+                        knowledge.insomniac_peek
+                    };
+
+                    if insomniac_peek {
+                        if let Some(role) = get_role(state, voter) {
+                            let knowledge = &mut state.cpu_knowledge[i];
+
+                            knowledge.role = role;
+                            if is_werewolf(knowledge.role) {
+                                knowledge.known_villagers.remove(&voter);
+                                knowledge.known_werewolves.insert(voter);
+                            };
+
+                        }
+                    }
 
                     let vote = get_vote(voter,
                                         get_participants(state),
@@ -678,7 +723,6 @@ fn apply_swaps(knowledge: &mut Knowledge) {
         if is_werewolf(previous_role) {
             knowledge.known_villagers.remove(&robber);
             knowledge.known_werewolves.insert(robber);
-
         };
 
         knowledge.known_werewolves.remove(&target);
@@ -852,6 +896,11 @@ fn display_claim(platform: &Platform,
                 let message = &format!("and you swapeed the roles of {} and {}.", p1, p2);
                 (platform.print_xy)(x, y + 1, message);
             }
+            InsomniacAction(role) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Insomniac));
+                let message = &format!("and you are now {}.", role);
+                (platform.print_xy)(x, y + 1, message);
+            }
         }
     } else {
         match claim {
@@ -922,6 +971,13 @@ fn display_claim(platform: &Platform,
     {} and {}.",
                                        p1,
                                        p2);
+                (platform.print_xy)(x, y + 1, message);
+            }
+            InsomniacAction(role) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claim that they are {}", participant, Insomniac));
+                let message = &format!("and they are now {}.", role);
                 (platform.print_xy)(x, y + 1, message);
             }
         }
