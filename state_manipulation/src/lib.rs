@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Robber, Werewolf, Troublemaker, Insomniac, Seer];
+    let mut roles = vec![Werewolf, Drunk, Werewolf, Troublemaker, Robber, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -413,6 +413,7 @@ and then view your new card.");
                         if let (Some(new_role), Some(knowledge)) =
                             (get_role(state, robber), get_knowledge_mut(state, robber)) {
 
+                            knowledge.role = new_role;
                             knowledge.true_claim = RobberAction(chosen, new_role);
                             knowledge.robber_swap = Some((robber, chosen, new_role));
                         }
@@ -483,11 +484,11 @@ and then view your new card.");
                 .map(|&p| p)
                 .collect();
             if let Some(second_choice) =
-                pick_particpant(platform,
-                                state,
-                                left_mouse_pressed,
-                                left_mouse_released,
-                                &remaining_options) {
+                pick_displayable(platform,
+                                 state,
+                                 left_mouse_pressed,
+                                 left_mouse_released,
+                                 &remaining_options) {
                 swap_roles(state, first_choice, second_choice);
                 state.player_knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
 
@@ -507,6 +508,48 @@ and then view your new card.");
                          left_mouse_released) {
                 state.turn = TroublemakerTurn;
             }
+        }
+        DrunkTurn => {
+            if state.initial_player == Drunk {
+                (platform.print_xy)(15,
+                                    3,
+                                    "Drunk, wake up
+and exchange your card with a card from the center.");
+
+                let choice = pick_displayable(platform,
+                                              state,
+                                              left_mouse_pressed,
+                                              left_mouse_released,
+                                              &CenterCard::all_values());
+                match choice {
+                    Some(chosen) => {
+                        swap_role_with_center(state, Player, chosen);
+
+                        if let Some(knowledge) = get_knowledge_mut(state, Player) {
+                            knowledge.true_claim = DrunkAction(chosen);
+                            knowledge.drunk_swap = Some((Player, chosen));
+                        }
+
+                        state.turn = state.turn.next();
+                    }
+                    None => {}
+                }
+            } else {
+                if let Some(drunk_index) = linear_search(&state.initial_cpu_roles, &Drunk) {
+                    let drunk = Cpu(drunk_index);
+
+                    let target = state.rng.gen::<CenterCard>();
+
+                    swap_role_with_center(state, drunk, target);
+
+                    if let Some(knowledge) = get_knowledge_mut(state, drunk) {
+                        knowledge.true_claim = DrunkAction(target);
+                        knowledge.drunk_swap = Some((drunk, target));
+                    }
+                }
+
+                state.turn = state.turn.next();
+            };
         }
         InsomniacTurn => {
             if state.initial_player == Insomniac {
@@ -719,6 +762,7 @@ and then view your new card.");
 fn apply_swaps(knowledge: &mut Knowledge) {
     //TODO maybe make this return a new type, "FinalKnowledge"?
     if let Some((robber, target, previous_role)) = knowledge.robber_swap {
+
         knowledge.role = previous_role;
         if is_werewolf(previous_role) {
             knowledge.known_villagers.remove(&robber);
@@ -759,6 +803,13 @@ fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
 
 const MAX_CLAIM_HEIGHT: i32 = 3;
 
+fn get_initial_role(state: &State, participant: Participant) -> Option<&Role> {
+    match participant {
+        Player => Some(&state.initial_player),
+        Cpu(index) => state.initial_cpu_roles.get(index),
+    }
+}
+
 fn get_knowledge(state: &State, participant: Participant) -> Option<&Knowledge> {
     match participant {
         Player => Some(&state.player_knowledge),
@@ -777,7 +828,6 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
     }
 
     let possible_claim = if let Some(knowledge) = get_knowledge(state, participant) {
-
         let claim = if is_werewolf(knowledge.role) {
             //TODO better lying
             //equal probability of all plausible possibilities?
@@ -901,6 +951,11 @@ fn display_claim(platform: &Platform,
                 let message = &format!("and you are now {}.", role);
                 (platform.print_xy)(x, y + 1, message);
             }
+            DrunkAction(card) => {
+                (platform.print_xy)(x, y, &format!("You claim that you are {}", Drunk));
+                let message = &format!("and you swapped with the {} card.", card);
+                (platform.print_xy)(x, y + 1, message);
+            }
         }
     } else {
         match claim {
@@ -978,6 +1033,13 @@ fn display_claim(platform: &Platform,
                                     y,
                                     &format!("{} claim that they are {}", participant, Insomniac));
                 let message = &format!("and they are now {}.", role);
+                (platform.print_xy)(x, y + 1, message);
+            }
+            DrunkAction(card) => {
+                (platform.print_xy)(x,
+                                    y,
+                                    &format!("{} claim that they are {}", participant, Drunk));
+                let message = &format!("and they swapped with the {} card.", card);
                 (platform.print_xy)(x, y + 1, message);
             }
         }
@@ -1061,6 +1123,23 @@ unsafe fn get_role_ptr(state: &mut State, p: Participant) -> *mut Role {
     match p {
         Player => &mut state.player,
         Cpu(i) => &mut state.cpu_roles[i],
+    }
+}
+
+fn swap_role_with_center(state: &mut State, p: Participant, center_card: CenterCard) {
+    unsafe {
+        let role_ptr = get_role_ptr(state, p);
+        let center_ptr = get_center_role_ptr(state, center_card);
+
+        std::ptr::swap(role_ptr, center_ptr);
+    }
+}
+
+unsafe fn get_center_role_ptr(state: &mut State, center_card: CenterCard) -> *mut Role {
+    match center_card {
+        First => &mut state.cpu_roles[0],
+        Second => &mut state.cpu_roles[1],
+        Third => &mut state.cpu_roles[2],
     }
 }
 
@@ -1181,46 +1260,54 @@ fn pick_cpu_player(platform: &Platform,
                    -> Option<Participant> {
     let cpu_participants = get_cpu_participants(state);
 
-    pick_particpant(platform,
-                    state,
-                    left_mouse_pressed,
-                    left_mouse_released,
-                    &cpu_participants)
+    pick_displayable(platform,
+                     state,
+                     left_mouse_pressed,
+                     left_mouse_released,
+                     &cpu_participants)
 }
 
-fn pick_particpant(platform: &Platform,
-                   state: &mut State,
-                   left_mouse_pressed: bool,
-                   left_mouse_released: bool,
-                   participants: &Vec<Participant>)
-                   -> Option<Participant> {
+use std::fmt::Display;
+//assumes the string representaion fits on one line
+fn pick_displayable<T: Display + Copy>(platform: &Platform,
+                                       state: &mut State,
+                                       left_mouse_pressed: bool,
+                                       left_mouse_released: bool,
+                                       things: &Vec<T>)
+                                       -> Option<T> {
     let size = (platform.size)();
 
-    for i in 0..participants.len() {
+    let mut strings: Vec<String> = things.iter().map(|t| t.to_string()).collect();
+
+    let width: usize = strings.iter().fold(0, |acc, s| std::cmp::max(acc, s.len()));
+    // println!("{}", width);
+    for i in (0..things.len()).rev() {
         let index = i as i32;
-        let participants = participants[i];
 
-        let spec = ButtonSpec {
-            x: (size.width / 2) - 6,
-            y: (index + 2) * 4,
-            w: 11,
-            h: 3,
-            text: participants.to_string(),
-            id: 12 + index,
-        };
+        if let Some(string) = strings.pop() {
+            let spec = ButtonSpec {
+                x: (size.width / 2) - 6,
+                y: (index + 2) * 4,
+                w: (width as i32) + 6,
+                h: 3,
+                text: string,
+                id: 12 + index,
+            };
 
-        if do_button(platform,
-                     &mut state.ui_context,
-                     &spec,
-                     left_mouse_pressed,
-                     left_mouse_released) {
-            return Some(participants);
+            if do_button(platform,
+                         &mut state.ui_context,
+                         &spec,
+                         left_mouse_pressed,
+                         left_mouse_released) {
+                return Some(things[i]);
+            }
         }
 
     }
 
     None
 }
+
 
 fn get_cpu_participants(state: &State) -> Vec<Participant> {
     let mut result = Vec::new();

@@ -63,6 +63,7 @@ pub enum Role {
     Mason,
     Seer,
     Troublemaker,
+    Drunk,
     Insomniac,
     Villager,
 }
@@ -78,6 +79,7 @@ impl fmt::Display for Role {
                    Robber => "a Robber",
                    Seer => "a Seer",
                    Troublemaker => "a Troublemaker",
+                   Drunk => "a Drunk",
                    Insomniac => "an Insomniac",
                    Villager => "a Villager",
                })
@@ -97,6 +99,7 @@ pub enum Turn {
     RobberReveal,
     TroublemakerTurn,
     TroublemakerSecondChoice(Participant),
+    DrunkTurn,
     InsomniacTurn,
     BeginDiscussion,
     Discuss,
@@ -119,7 +122,8 @@ impl Turn {
             RobberTurn => TroublemakerTurn,
             RobberReveal => RobberTurn.next(),
             TroublemakerSecondChoice(_) => TroublemakerTurn.next(),
-            TroublemakerTurn => InsomniacTurn,
+            TroublemakerTurn => DrunkTurn,
+            DrunkTurn => InsomniacTurn,
             InsomniacTurn => BeginDiscussion,
             BeginDiscussion => Discuss,
             Discuss => Vote,
@@ -127,6 +131,36 @@ impl Turn {
             Resolution => Ready,
         }
     }
+}
+
+
+
+pub trait AllValues {
+    fn all_values() -> Vec<Self> where Self: std::marker::Sized;
+}
+
+use rand::Rand;
+use rand::Rng;
+
+macro_rules! all_values_rand_impl {
+    ($($t:ty)*) => ($(
+        impl Rand for $t {
+            fn rand<R: Rng>(rng: &mut R) -> Self {
+                let values = Self::all_values();
+
+                let len = values.len();
+
+                if len == 0 {
+                    panic!("Cannot pick a random value because T::all_values()\
+ returned an empty vector!")
+                } else {
+                    let i = rng.gen_range(0, len);
+
+                    values[i]
+                }
+            }
+        }
+    )*)
 }
 
 #[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
@@ -143,28 +177,7 @@ impl AllValues for CenterPair {
     }
 }
 
-
-pub trait AllValues {
-    fn all_values() -> Vec<Self> where Self: std::marker::Sized;
-}
-
-use rand::Rand;
-use rand::Rng;
-impl Rand for CenterPair {
-    fn rand<R: Rng>(rng: &mut R) -> Self {
-        let values = Self::all_values();
-
-        let len = values.len();
-
-        if len == 0 {
-            panic!("Cannot pick a random value because T::all_values() returned an empty vector!")
-        } else {
-            let i = rng.gen_range(0, len);
-
-            values[i]
-        }
-    }
-}
+all_values_rand_impl!(CenterPair);
 
 impl fmt::Display for CenterPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -175,6 +188,35 @@ impl fmt::Display for CenterPair {
                    FirstSecond => "First and Second",
                    FirstThird => "First and Third",
                    SecondThird => "Second and Third",
+               })
+    }
+}
+
+#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
+pub enum CenterCard {
+    First,
+    Second,
+    Third,
+}
+use CenterCard::*;
+
+impl AllValues for CenterCard {
+    fn all_values() -> Vec<CenterCard> {
+        vec![First, Second, Third]
+    }
+}
+
+all_values_rand_impl!(CenterCard);
+
+impl fmt::Display for CenterCard {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+        write!(f,
+               "{}",
+               match *self {
+                   First => "First",
+                   Second => "Second",
+                   Third => "Third",
                })
     }
 }
@@ -207,6 +249,7 @@ pub struct Knowledge {
     pub known_non_active: HashSet<Role>,
     pub robber_swap: Option<(Participant, Participant, Role)>,
     pub troublemaker_swap: Option<(Participant, Participant)>,
+    pub drunk_swap: Option<(Participant, CenterCard)>,
     pub insomniac_peek: bool,
 }
 
@@ -220,6 +263,7 @@ impl Knowledge {
             known_non_active: HashSet::new(),
             robber_swap: None,
             troublemaker_swap: None,
+            drunk_swap: None,
             insomniac_peek: false,
         }
     }
@@ -234,6 +278,7 @@ pub enum Claim {
     SeerRevealTwoAction(CenterPair, Role, Role),
     TroublemakerAction(Participant, Participant),
     InsomniacAction(Role),
+    DrunkAction(CenterCard),
 }
 use Claim::*;
 
