@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Drunk, Werewolf, Troublemaker, Robber, Seer];
+    let mut roles = vec![Werewolf, Hunter, Werewolf, Troublemaker, Robber, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -683,7 +683,21 @@ and exchange your card with a card from the center.");
                                   .iter()
                                   .map(|&(_, v)| v)
                                   .collect();
-            let targets = count_votes(&just_votes);
+            let mut targets = count_votes(&just_votes);
+
+            if let Some(hunter_participant) = get_participant_with_role(state, Hunter) {
+                if targets.contains(&hunter_participant) {
+                    if let Some(hunter_target) =
+                        state.votes
+                            .iter()
+                            .find(|&&(voter, _)| voter == hunter_participant)
+                            .map(|&(_, v)| v) {
+                        if !targets.contains(&hunter_target) {
+                            targets.push(hunter_target)
+                        }
+                    }
+                }
+            }
 
             if targets.len() == 0 {
                 (platform.print_xy)(10, 10, "Nobody died.");
@@ -757,6 +771,14 @@ and exchange your card with a card from the center.");
     draw(platform, state);
 
     false
+}
+
+fn get_participant_with_role(state: &State, role: Role) -> Option<Participant> {
+    if state.player == role {
+        Some(Player)
+    } else {
+        linear_search(&state.cpu_roles, &role).map(|i| Cpu(i))
+    }
 }
 
 fn apply_swaps(knowledge: &mut Knowledge) {

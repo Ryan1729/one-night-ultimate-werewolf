@@ -66,6 +66,7 @@ pub enum Role {
     Drunk,
     Insomniac,
     Villager,
+    Hunter,
 }
 use Role::*;
 
@@ -82,6 +83,7 @@ impl fmt::Display for Role {
                    Drunk => "a Drunk",
                    Insomniac => "an Insomniac",
                    Villager => "a Villager",
+                   Hunter => "a Hunter",
                })
     }
 }
