@@ -67,6 +67,7 @@ pub enum Role {
     Drunk,
     Insomniac,
     Villager,
+    Tanner,
     Hunter,
 }
 use Role::*;
@@ -85,6 +86,7 @@ impl fmt::Display for Role {
                    Drunk => "a Drunk",
                    Insomniac => "an Insomniac",
                    Villager => "a Villager",
+                   Tanner => "a Tanner",
                    Hunter => "a Hunter",
                })
     }
@@ -254,6 +256,7 @@ pub struct Knowledge {
     pub true_claim: Claim,
     pub known_non_active: HashSet<Role>,
     pub known_minion: Option<Participant>,
+    pub known_tanner: Option<Participant>,
     pub robber_swap: Option<(Participant, Participant, Role)>,
     pub troublemaker_swap: Option<(Participant, Participant)>,
     pub drunk_swap: Option<(Participant, CenterCard)>,
@@ -261,14 +264,22 @@ pub struct Knowledge {
 }
 
 impl Knowledge {
-    pub fn new(role: Role) -> Self {
+    pub fn new(role: Role, participant: Participant) -> Self {
+
+        let (known_minion, known_tanner) = match role {
+            Minion => (Some(participant), None),
+            Minion => (None, Some(participant)),
+            _ => (None, None),
+        };
+
         Knowledge {
             known_werewolves: HashSet::new(),
             known_villagers: HashSet::new(),
             role,
             true_claim: Simple(role),
             known_non_active: HashSet::new(),
-            known_minion: None,
+            known_minion,
+            known_tanner,
             robber_swap: None,
             troublemaker_swap: None,
             drunk_swap: None,

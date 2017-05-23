@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Robber, Werewolf, Troublemaker, Minion, Seer];
+    let mut roles = vec![Werewolf, Minion, Tanner, Troublemaker, Werewolf, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -77,9 +77,13 @@ fn get_roles_and_knowledge(rng: &mut StdRng)
 
     let cpu_roles = roles;
 
-    let player_knowledge = Knowledge::new(player);
+    let player_knowledge = Knowledge::new(player, Player);
 
-    let cpu_knowledge = cpu_roles.iter().map(|&role| Knowledge::new(role)).collect();
+    let mut cpu_knowledge = Vec::new();
+
+    for i in 0..cpu_roles.len() {
+        cpu_knowledge.push(Knowledge::new(cpu_roles[i], Cpu(i)));
+    }
 
     (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge)
 }
@@ -352,6 +356,10 @@ player’s card or two of the center cards.");
                                         knowledge.known_villagers.remove(&chosen);
                                         knowledge.known_werewolves.remove(&chosen);
                                         knowledge.known_minion = Some(chosen);
+                                    } else if seen_role == Tanner {
+                                        knowledge.known_villagers.remove(&chosen);
+                                        knowledge.known_werewolves.remove(&chosen);
+                                        knowledge.known_tanner = Some(chosen);
                                     } else {
                                         knowledge.known_villagers.insert(chosen);
                                     };
@@ -681,6 +689,9 @@ and exchange your card with a card from the center.");
                             } else if knowledge.role == Minion {
                                 knowledge.known_villagers.remove(&voter);
                                 knowledge.known_minion = Some(voter);
+                            } else if knowledge.role == Tanner {
+                                knowledge.known_villagers.remove(&voter);
+                                knowledge.known_tanner = Some(voter);
                             };
 
                         }
@@ -748,6 +759,14 @@ and exchange your card with a card from the center.");
                 let target_roles = targets.iter().filter_map(|&p| get_role(state, p));
                 let hit_werevoles_count = target_roles.filter(|&r| is_werewolf(r)).count();
 
+                let possible_dead_tanner =
+                    get_participant_with_role(state, Tanner).and_then(|p| if
+                        targets.contains(&p) {
+                                                                          Some(p)
+                                                                      } else {
+                                                                          None
+                                                                      });
+
                 if hit_werevoles_count >= 1 {
                     if hit_werevoles_count == 1 {
                         (platform.print_xy)(10, 12, "A werewolf died!");
@@ -757,6 +776,17 @@ and exchange your card with a card from the center.");
                                             &format!("{} werewolves died!", hit_werevoles_count));
                     }
                     (platform.print_xy)(10, 13, "Village team wins!");
+
+                    if let Some(dead_tanner) = possible_dead_tanner {
+                        let pronoun = if dead_tanner == Player { "You" } else { "they" };
+                        (platform.print_xy)(10,
+                                            14,
+                                            &format!("{} died and {} were {}.",
+                                                     dead_tanner,
+                                                     pronoun,
+                                                     Tanner));
+                        (platform.print_xy)(10, 15, "Tanner wins too!");
+                    }
                 } else {
                     let werewolves = get_werewolves(state);
 
@@ -764,21 +794,55 @@ and exchange your card with a card from the center.");
                         (platform.print_xy)(10,
                                             12,
                                             "No werewolves died but a player was a werewolf!");
-                        (platform.print_xy)(10, 13, "Werewolf team wins!");
+
+                        if let Some(dead_tanner) = possible_dead_tanner {
+                            let pronoun = if dead_tanner == Player { "You" } else { "they" };
+                            (platform.print_xy)(10,
+                                                14,
+                                                &format!("{} died and {} were {}.",
+                                                         dead_tanner,
+                                                         pronoun,
+                                                         Tanner));
+                            (platform.print_xy)(10, 15, "Tanner wins!");
+                        } else {
+                            (platform.print_xy)(10, 13, "Werewolf team wins!");
+                        }
+
                     } else {
                         (platform.print_xy)(10,
                                             12,
-                                            "No werewolves died but a nobody was a werewolf!");
+                                            "No werewolves died but nobody was a werewolf!");
 
                         if let Some(_) = get_participant_with_role(state, Minion) {
                             (platform.print_xy)(10, 13, "But there was a minion! The minion wins!");
+
+                            if let Some(dead_tanner) = possible_dead_tanner {
+                                let pronoun = if dead_tanner == Player { "You" } else { "they" };
+                                (platform.print_xy)(10,
+                                                    14,
+                                                    &format!("{} died and {} were {}.",
+                                                             dead_tanner,
+                                                             pronoun,
+                                                             Tanner));
+                                (platform.print_xy)(10, 15, "Tanner wins too!");
+                            };
                         } else {
-                            (platform.print_xy)(10, 13, "Nobody wins!");
+                            if let Some(dead_tanner) = possible_dead_tanner {
+                                let pronoun = if dead_tanner == Player { "You" } else { "they" };
+                                (platform.print_xy)(10,
+                                                    14,
+                                                    &format!("{} died and {} were {}.",
+                                                             dead_tanner,
+                                                             pronoun,
+                                                             Tanner));
+                                (platform.print_xy)(10, 15, "Tanner wins!");
+                            } else {
+                                (platform.print_xy)(10, 13, "Nobody wins!");
+                            }
                         }
                     }
                 }
             }
-
 
             (platform.print_xy)(10, 20, &format!("You are {}", state.player));
 
@@ -834,6 +898,9 @@ fn apply_swaps(knowledge: &mut Knowledge) {
         } else if knowledge.role == Minion {
             knowledge.known_villagers.remove(&robber);
             knowledge.known_minion = Some(robber);
+        } else if knowledge.role == Tanner {
+            knowledge.known_villagers.remove(&robber);
+            knowledge.known_tanner = Some(robber);
         };
 
         knowledge.known_werewolves.remove(&target);
@@ -906,6 +973,9 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
                 //TODO try to get another player voted for
                 Simple(Villager)
             }
+        } else if knowledge.role == Tanner {
+            //TODO try to get self voted for more convincingly
+            Simple(Werewolf)
         } else {
             //TODO occasionally lying while a villager to try and snuff out werewolves
             knowledge.true_claim
