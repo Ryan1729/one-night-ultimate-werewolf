@@ -67,7 +67,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>) {
-    let mut roles = vec![Werewolf, Hunter, Werewolf, Troublemaker, Robber, Seer];
+    let mut roles = vec![Werewolf, Robber, Werewolf, Troublemaker, Minion, Seer];
 
     rng.shuffle(&mut roles);
 
@@ -184,16 +184,7 @@ pub fn game_update_and_render(platform: &Platform,
             let ready = if state.player == Werewolf {
                 (platform.print_xy)(10, 10, "Werewolves, wake up and look for other werewolves.");
 
-                for i in 0..werewolves.len() {
-                    let index = i as i32;
-
-                    match werewolves[i] {
-                        Player => (platform.print_xy)(10, 12 + index, "You are a werewolf. (duh!)"),
-                        cpu => {
-                            (platform.print_xy)(10, 12 + index, &format!("{} is a werewolf.", cpu))
-                        }
-                    }
-                }
+                list_werewolves(platform, &werewolves);
 
                 ready_button(platform, state, left_mouse_pressed, left_mouse_released)
             } else {
@@ -217,6 +208,30 @@ pub fn game_update_and_render(platform: &Platform,
                 state.turn = state.turn.next();
             }
 
+        }
+        MinionTurn => {
+            let werewolves = get_werewolves(state);
+
+            if state.initial_player == Minion {
+                (platform.print_xy)(10,
+                                    10,
+                                    "Minion, wake up. Werewolves, stick out
+your thumb so the Minion can see who you are.");
+
+                list_werewolves(platform, &werewolves);
+            } else {
+                if let Some(minion_index) = linear_search(&state.initial_cpu_roles, &Minion) {
+                    let minion = Cpu(minion_index);
+
+                    if let Some(knowledge) = get_knowledge_mut(state, minion) {
+                        knowledge.known_werewolves.extend(werewolves.iter());
+                        knowledge.known_minion = Some(minion);
+                        knowledge.true_claim = Simple(Minion);
+                    }
+                }
+
+                state.turn = state.turn.next();
+            }
         }
         MasonTurn => {
             let masons = get_masons(state);
@@ -333,6 +348,10 @@ player’s card or two of the center cards.");
                                     if is_werewolf(seen_role) {
                                         knowledge.known_villagers.remove(&chosen);
                                         knowledge.known_werewolves.insert(chosen);
+                                    } else if seen_role == Minion {
+                                        knowledge.known_villagers.remove(&chosen);
+                                        knowledge.known_werewolves.remove(&chosen);
+                                        knowledge.known_minion = Some(chosen);
                                     } else {
                                         knowledge.known_villagers.insert(chosen);
                                     };
@@ -613,7 +632,11 @@ and exchange your card with a card from the center.");
             for i in 0..claims.len() {
                 let index = i as i32;
 
-                display_claim(platform, 10, 6 + (index * MAX_CLAIM_HEIGHT), &claims[i]);
+                display_claim(state,
+                              platform,
+                              10,
+                              6 + (index * MAX_CLAIM_HEIGHT),
+                              &claims[i]);
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -655,6 +678,9 @@ and exchange your card with a card from the center.");
                             if is_werewolf(knowledge.role) {
                                 knowledge.known_villagers.remove(&voter);
                                 knowledge.known_werewolves.insert(voter);
+                            } else if knowledge.role == Minion {
+                                knowledge.known_villagers.remove(&voter);
+                                knowledge.known_minion = Some(voter);
                             };
 
                         }
@@ -743,7 +769,12 @@ and exchange your card with a card from the center.");
                         (platform.print_xy)(10,
                                             12,
                                             "No werewolves died but a nobody was a werewolf!");
-                        (platform.print_xy)(10, 13, "Nobody wins!");
+
+                        if let Some(_) = get_participant_with_role(state, Minion) {
+                            (platform.print_xy)(10, 13, "But there was a minion! The minion wins!");
+                        } else {
+                            (platform.print_xy)(10, 13, "Nobody wins!");
+                        }
                     }
                 }
             }
@@ -773,6 +804,17 @@ and exchange your card with a card from the center.");
     false
 }
 
+fn list_werewolves(platform: &Platform, werewolves: &Vec<Participant>) {
+    for i in 0..werewolves.len() {
+        let index = i as i32;
+
+        match werewolves[i] {
+            Player => (platform.print_xy)(10, 12 + index, "You are a werewolf. (duh!)"),
+            cpu => (platform.print_xy)(10, 12 + index, &format!("{} is a werewolf.", cpu)),
+        }
+    }
+}
+
 fn get_participant_with_role(state: &State, role: Role) -> Option<Participant> {
     if state.player == role {
         Some(Player)
@@ -789,11 +831,13 @@ fn apply_swaps(knowledge: &mut Knowledge) {
         if is_werewolf(previous_role) {
             knowledge.known_villagers.remove(&robber);
             knowledge.known_werewolves.insert(robber);
+        } else if knowledge.role == Minion {
+            knowledge.known_villagers.remove(&robber);
+            knowledge.known_minion = Some(robber);
         };
 
         knowledge.known_werewolves.remove(&target);
         knowledge.known_villagers.insert(target);
-
     }
 
     if let Some((target1, target2)) = knowledge.troublemaker_swap {
@@ -854,8 +898,16 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
             //TODO better lying
             //equal probability of all plausible possibilities?
             Simple(Villager)
+        } else if knowledge.role == Minion {
+            if knowledge.known_werewolves.len() > 0 {
+                //TODO look at already made claims and try to cover for Werewolves?
+                Simple(Werewolf)
+            } else {
+                //TODO try to get another player voted for
+                Simple(Villager)
+            }
         } else {
-            //TODO occasionally lying while a villager
+            //TODO occasionally lying while a villager to try and snuff out werewolves
             knowledge.true_claim
         };
 
@@ -919,7 +971,8 @@ fn get_claim_vec(state: &State) -> Vec<(Participant, Claim)> {
 
     result
 }
-fn display_claim(platform: &Platform,
+fn display_claim(state: &State,
+                 platform: &Platform,
                  x: i32,
                  y: i32,
                  &(participant, claim): &(Participant, Claim)) {
@@ -927,6 +980,22 @@ fn display_claim(platform: &Platform,
         match claim {
             Simple(role) => {
                 (platform.print_xy)(x, y, &format!("You claim that you are {}", role));
+
+                if role == Minion {
+                    let possible_list = get_knowledge(state, participant).and_then(|k| {
+                        let list = str_list(&k.known_werewolves.iter().collect());
+
+                        if list.len() > 0 { Some(list) } else { None }
+                    });
+                    if let Some(list) = possible_list {
+
+                        (platform.print_xy)(x,
+
+                                            y + 1,
+                                            &format!("and you know {} are werewolves.", list));
+                    }
+
+                }
             }
             MasonAction(Some(other_mason)) => {
                 (platform.print_xy)(x,
@@ -985,6 +1054,15 @@ fn display_claim(platform: &Platform,
                 (platform.print_xy)(x,
                                     y,
                                     &format!("{} claims that they are {}", participant, role));
+
+                if role == Minion {
+                    let possible_list = get_known_werevolves_str_list(state, participant);
+                    if let Some(list) = possible_list {
+                        (platform.print_xy)(x,
+                                            y + 1,
+                                            &format!("and they know {} are werewolves.", list));
+                    }
+                }
             }
             MasonAction(Some(other_mason)) => {
                 let verb_form = if other_mason == Player { "are" } else { "is" };
@@ -1067,6 +1145,14 @@ fn display_claim(platform: &Platform,
         }
 
     }
+}
+
+fn get_known_werevolves_str_list(state: &State, participant: Participant) -> Option<String> {
+    get_knowledge(state, participant).and_then(|k| {
+       let list = str_list(&k.known_werewolves.iter().collect());
+
+       if list.len() > 0 { Some(list) } else { None }
+   })
 }
 
 fn make_remaining_claims(state: &mut State) {
@@ -1346,7 +1432,7 @@ fn get_vote(participant: Participant,
             knowledge: &Knowledge,
             rng: &mut StdRng)
             -> Participant {
-    let filtered: Vec<Participant> = if is_werewolf(knowledge.role) {
+    let filtered: Vec<Participant> = if is_werewolf(knowledge.role) || knowledge.role == Minion {
         let mut vec: Vec<Participant> = knowledge.known_villagers
             .iter()
             .map(|&p| p)
@@ -1360,6 +1446,8 @@ fn get_vote(participant: Participant,
             .filter(|p| **p != participant && !knowledge.known_werewolves.contains(p))
             .map(|&p| p)
             .collect()
+
+
     } else {
         let mut vec: Vec<Participant> = knowledge.known_werewolves
             .iter()

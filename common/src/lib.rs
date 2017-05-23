@@ -59,6 +59,7 @@ impl fmt::Debug for State {
 #[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord, Hash)]
 pub enum Role {
     Werewolf,
+    Minion,
     Robber,
     Mason,
     Seer,
@@ -76,6 +77,7 @@ impl fmt::Display for Role {
                "{}",
                match *self {
                    Werewolf => "a Werewolf",
+                   Minion => "a Minion",
                    Mason => "a Mason",
                    Robber => "a Robber",
                    Seer => "a Seer",
@@ -93,6 +95,7 @@ pub enum Turn {
     Ready,
     SeeRole,
     Werewolves,
+    MinionTurn,
     MasonTurn,
     SeerTurn,
     SeerRevealOne(Participant),
@@ -116,7 +119,8 @@ impl Turn {
             //we only need the (*)Reveal states when the player is the (*)
             Ready => SeeRole,
             SeeRole => Werewolves,
-            Werewolves => MasonTurn,
+            Werewolves => MinionTurn,
+            MinionTurn => MasonTurn,
             MasonTurn => SeerTurn,
             SeerTurn => RobberTurn,
             SeerRevealOne(_) => SeerTurn.next(),
@@ -249,6 +253,7 @@ pub struct Knowledge {
     pub role: Role,
     pub true_claim: Claim,
     pub known_non_active: HashSet<Role>,
+    pub known_minion: Option<Participant>,
     pub robber_swap: Option<(Participant, Participant, Role)>,
     pub troublemaker_swap: Option<(Participant, Participant)>,
     pub drunk_swap: Option<(Participant, CenterCard)>,
@@ -263,6 +268,7 @@ impl Knowledge {
             role,
             true_claim: Simple(role),
             known_non_active: HashSet::new(),
+            known_minion: None,
             robber_swap: None,
             troublemaker_swap: None,
             drunk_swap: None,
