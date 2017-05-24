@@ -268,7 +268,7 @@ impl Knowledge {
 
         let (known_minion, known_tanner) = match role {
             Minion => (Some(participant), None),
-            Minion => (None, Some(participant)),
+            Tanner => (None, Some(participant)),
             _ => (None, None),
         };
 
