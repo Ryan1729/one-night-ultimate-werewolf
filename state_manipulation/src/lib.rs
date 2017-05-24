@@ -232,6 +232,32 @@ pub fn game_update_and_render(platform: &Platform,
                 };
             }
         }
+        DoppelSeerTurn => {
+            seer_turn(state,
+                      platform,
+                      left_mouse_pressed,
+                      left_mouse_released,
+                      DoppelSeerRevealOne,
+                      DoppelSeerRevealTwo,
+                      doppel_reveal_one_turn,
+                      doppel_reveal_two_turn,
+                      is_doppel_seer,
+                      "DoppelSeer");
+        }
+        DoppelSeerRevealOne(participant) => {
+            seer_reveal_one(state,
+                            platform,
+                            left_mouse_pressed,
+                            left_mouse_released,
+                            participant);
+        }
+        DoppelSeerRevealTwo(pair) => {
+            seer_reveal_two(state,
+                            platform,
+                            left_mouse_pressed,
+                            left_mouse_released,
+                            pair);
+        }
         Werewolves => {
             let werewolves = get_werewolves(state);
 
@@ -352,112 +378,30 @@ your thumb so the Minion can see who you are.");
             }
         }
         SeerTurn => {
-            if state.player == Seer {
-                (platform.print_xy)(15,
-                                    3,
-                                    "Seer, wake up.
-You may look at another
-player’s card or two of the center cards.");
-
-
-                let choice =
-                    pick_seer_choice(platform, state, left_mouse_pressed, left_mouse_released);
-                match choice {
-                    SeerCpuOrSkip(cpu_or_skip) => {
-                        match cpu_or_skip {
-
-                            Skip => {
-                                state.turn = state.turn.next();
-                            }
-                            Chosen(chosen) => {
-                                state.turn = SeerRevealOne(chosen);
-                            }
-                            NoChoice => {}
-                        }
-                    }
-                    ChosenPair(chosen) => {
-                        state.turn = SeerRevealTwo(chosen);
-                    }
-                }
-            } else {
-                if let Some(seer_index) = linear_search(&state.cpu_roles, &Seer) {
-                    let seer = Cpu(seer_index);
-                    println!("{}", seer);
-
-                    let look_at_two = state.rng.gen::<bool>();
-
-                    //TODO choose player or center based on active roles?
-                    if look_at_two {
-
-                        let pair = state.rng.gen::<CenterPair>();
-
-                        let (role1, role2) = get_role_pair(state, pair);
-                        if let Some(knowledge) = get_knowledge_mut(state, seer) {
-                            knowledge.known_non_active.insert(role1);
-                            knowledge.known_non_active.insert(role2);
-
-                            knowledge.true_claim = SeerRevealTwoAction(pair, role1, role2);
-                        }
-                    } else {
-                        let other_participants = get_other_participants(state, seer);
-                        if let Some(&chosen) = state.rng.choose(&other_participants) {
-                            if let Some(seen_role) = get_role(state, chosen) {
-                                if let Some(knowledge) = get_knowledge_mut(state, seer) {
-                                    if is_werewolf(seen_role) {
-                                        knowledge.known_villagers.remove(&chosen);
-                                        knowledge.known_werewolves.insert(chosen);
-                                    } else if seen_role == Minion {
-                                        knowledge.known_villagers.remove(&chosen);
-                                        knowledge.known_werewolves.remove(&chosen);
-                                        knowledge.known_minion = Some(chosen);
-                                    } else if seen_role == Tanner {
-                                        knowledge.known_villagers.remove(&chosen);
-                                        knowledge.known_werewolves.remove(&chosen);
-                                        knowledge.known_tanner = Some(chosen);
-                                    } else {
-                                        knowledge.known_villagers.insert(chosen);
-                                    };
-
-                                    knowledge.true_claim = SeerRevealOneAction(chosen, seen_role);
-                                }
-                            }
-                        }
-
-                    }
-                }
-
-                state.turn = state.turn.next();
-            };
+            seer_turn(state,
+                      platform,
+                      left_mouse_pressed,
+                      left_mouse_released,
+                      SeerRevealOne,
+                      SeerRevealTwo,
+                      reveal_one_turn,
+                      reveal_two_turn,
+                      is_seer,
+                      "Seer");
         }
         SeerRevealOne(participant) => {
-            if let Some(role) = get_role(state, participant) {
-                (platform.print_xy)(10, 10, &format!("{} is {}.", participant, role));
-            } else {
-                (platform.print_xy)(10,
-                                    10,
-                                    &format!("{} apparently isn't playing?!", participant));
-            }
-
-            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
-                state.turn = state.turn.next();
-            }
+            seer_reveal_one(state,
+                            platform,
+                            left_mouse_pressed,
+                            left_mouse_released,
+                            participant);
         }
         SeerRevealTwo(pair) => {
-            let (role1, role2) = get_role_pair(state, pair);
-
-            let (ordinal1, ordinal2) = match pair {
-                FirstSecond => ("First", "Second"),
-                FirstThird => ("First", "Third"),
-                SecondThird => ("Second", "Third"),
-            };
-
-            (platform.print_xy)(10, 10, &format!("The {} card is {}.", ordinal1, role1));
-            (platform.print_xy)(10, 11, &format!("And the {} card is {}.", ordinal2, role2));
-
-
-            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
-                state.turn = state.turn.next();
-            }
+            seer_reveal_two(state,
+                            platform,
+                            left_mouse_pressed,
+                            left_mouse_released,
+                            pair);
         }
         RobberTurn => {
             if state.initial_player == Robber {
@@ -945,6 +889,192 @@ and exchange your card with a card from the center.");
     draw(platform, state);
 
     false
+}
+
+fn reveal_one_turn(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
+    SeerRevealOneAction(p, r)
+}
+fn reveal_two_turn(state: &State,
+                   participant: Participant,
+                   pair: CenterPair,
+                   r1: Role,
+                   r2: Role)
+                   -> Claim {
+    SeerRevealTwoAction(pair, r1, r2)
+}
+
+fn doppel_reveal_one_turn(state: &State,
+                          participant: Participant,
+                          p: Participant,
+                          r: Role)
+                          -> Claim {
+    let participant = seer_doppel_target_or_player(get_role(state, participant)
+                                                       .unwrap_or(Villager));
+
+    DoppelSeerRevealOneAction(participant, p, r)
+}
+fn doppel_reveal_two_turn(state: &State,
+                          participant: Participant,
+                          pair: CenterPair,
+                          r1: Role,
+                          r2: Role)
+                          -> Claim {
+    let participant = seer_doppel_target_or_player(get_role(state, participant)
+                                                       .unwrap_or(Villager));
+    DoppelSeerRevealTwoAction(participant, pair, r1, r2)
+}
+
+
+fn seer_doppel_target_or_player(role: Role) -> Participant {
+    match role {
+        DoppelSeer(p) => p,
+        _ => Player,
+    }
+}
+
+fn is_seer(role: &Role) -> bool {
+    role == &Seer
+}
+
+fn is_doppel_seer(role: &Role) -> bool {
+    match role {
+        &DoppelSeer(_) => true,
+        _ => false,
+    }
+}
+
+fn seer_reveal_two(state: &mut State,
+                   platform: &Platform,
+                   left_mouse_pressed: bool,
+                   left_mouse_released: bool,
+                   pair: CenterPair) {
+    let (role1, role2) = get_role_pair(state, pair);
+
+    let (ordinal1, ordinal2) = match pair {
+        FirstSecond => ("First", "Second"),
+        FirstThird => ("First", "Third"),
+        SecondThird => ("Second", "Third"),
+    };
+
+    (platform.print_xy)(10, 10, &format!("The {} card is {}.", ordinal1, role1));
+    (platform.print_xy)(10, 11, &format!("And the {} card is {}.", ordinal2, role2));
+
+
+    if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+        state.turn = state.turn.next();
+    }
+}
+
+fn seer_reveal_one(state: &mut State,
+                   platform: &Platform,
+                   left_mouse_pressed: bool,
+                   left_mouse_released: bool,
+                   participant: Participant) {
+    if let Some(role) = get_role(state, participant) {
+        (platform.print_xy)(10, 10, &format!("{} is {}.", participant, role));
+    } else {
+        (platform.print_xy)(10,
+                            10,
+                            &format!("{} apparently isn't playing?!", participant));
+    }
+
+    if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+        state.turn = state.turn.next();
+    }
+}
+
+fn seer_turn(state: &mut State,
+             platform: &Platform,
+             left_mouse_pressed: bool,
+             left_mouse_released: bool,
+             reveal_one: fn(Participant) -> Turn,
+             reveal_two: fn(CenterPair) -> Turn,
+             reveal_one_action: fn(&State, Participant, Participant, Role) -> Claim,
+             reveal_two_action: fn(&State, Participant, CenterPair, Role, Role) -> Claim,
+             role_pred: fn(&Role) -> bool,
+             name: &str) {
+
+
+    if role_pred(&state.player) {
+        (platform.print_xy)(15,
+                            3,
+                            &format!("{}, wake up.
+You may look at another
+player’s card or two of the center cards.",
+                                     name));
+
+
+        let choice = pick_seer_choice(platform, state, left_mouse_pressed, left_mouse_released);
+        match choice {
+            SeerCpuOrSkip(cpu_or_skip) => {
+                match cpu_or_skip {
+
+                    Skip => {
+                        state.turn = state.turn.next();
+                    }
+                    Chosen(chosen) => {
+                        state.turn = reveal_one(chosen);
+                    }
+                    NoChoice => {}
+                }
+            }
+            ChosenPair(chosen) => {
+                state.turn = reveal_two(chosen);
+            }
+        }
+    } else {
+        if let Some(seer_index) = linear_search_by(&state.cpu_roles, role_pred) {
+            let seer = Cpu(seer_index);
+            println!("{}", seer);
+
+            let look_at_two = state.rng.gen::<bool>();
+
+            //TODO choose player or center based on active roles?
+            if look_at_two {
+
+                let pair = state.rng.gen::<CenterPair>();
+
+                let (role1, role2) = get_role_pair(state, pair);
+                let true_claim = reveal_two_action(state, seer, pair, role1, role2);
+
+                if let Some(knowledge) = get_knowledge_mut(state, seer) {
+                    knowledge.known_non_active.insert(role1);
+                    knowledge.known_non_active.insert(role2);
+
+                    knowledge.true_claim = true_claim;
+                }
+            } else {
+                let other_participants = get_other_participants(state, seer);
+                if let Some(&chosen) = state.rng.choose(&other_participants) {
+                    if let Some(seen_role) = get_role(state, chosen) {
+                        let true_claim = reveal_one_action(state, seer, chosen, seen_role);
+
+                        if let Some(knowledge) = get_knowledge_mut(state, seer) {
+                            if is_werewolf(seen_role) {
+                                knowledge.known_villagers.remove(&chosen);
+                                knowledge.known_werewolves.insert(chosen);
+                            } else if seen_role == Minion {
+                                knowledge.known_villagers.remove(&chosen);
+                                knowledge.known_werewolves.remove(&chosen);
+                                knowledge.known_minion = Some(chosen);
+                            } else if seen_role == Tanner {
+                                knowledge.known_villagers.remove(&chosen);
+                                knowledge.known_werewolves.remove(&chosen);
+                                knowledge.known_tanner = Some(chosen);
+                            } else {
+                                knowledge.known_villagers.insert(chosen);
+                            };
+
+                            knowledge.true_claim = true_claim;
+                        }
+                    }
+                }
+
+            }
+        }
+
+        state.turn = state.turn.next();
+    };
 }
 
 fn display_tanner_win(platform: &Platform, dead_tanner: Participant, addtional: bool) {

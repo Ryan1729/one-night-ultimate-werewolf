@@ -73,7 +73,7 @@ pub enum Role {
     // DoppelMinion(Participant),
     // DoppelRobber(Participant),
     // DoppelMason(Participant),
-    // DoppelSeer(Participant),
+    DoppelSeer(Participant),
     // DoppelTroublemaker(Participant),
     // DoppelDrunk(Participant),
     // DoppelInsomniac(Participant),
@@ -89,7 +89,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         // Minion => DoppelMinion(participant),
         // Robber => DoppelRobber(participant),
         // Mason => DoppelMason(participant),
-        // Seer => DoppelSeer(participant),
+        Seer => DoppelSeer(participant),
         // Troublemaker => DoppelTroublemaker(participant),
         // Drunk => DoppelDrunk(participant),
         // Insomniac => DoppelInsomniac(participant),
@@ -100,7 +100,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         // DoppelMinion(_) => DoppelMinion(participant),
         // DoppelRobber(_) => DoppelRobber(participant),
         // DoppelMason(_) => DoppelMason(participant),
-        // DoppelSeer(_) => DoppelSeer(participant),
+        DoppelSeer(_) => DoppelSeer(participant),
         // DoppelTroublemaker(_) => DoppelTroublemaker(participant),
         // DoppelDrunk(_) => DoppelDrunk(participant),
         // DoppelInsomniac(_) => DoppelInsomniac(participant),
@@ -134,7 +134,7 @@ impl fmt::Display for Role {
                    //    DoppelMinion(_) |
                    //    DoppelMason(_) |
                    //    DoppelRobber(_) |
-                   //    DoppelSeer(_) |
+                      DoppelSeer(_) |
                    //    DoppelTroublemaker(_) |
                    //    DoppelDrunk(_) |
                    //    DoppelInsomniac(_) |
@@ -149,6 +149,9 @@ impl fmt::Display for Role {
 pub enum Turn {
     Ready,
     SeeRole(bool),
+    DoppelSeerTurn,
+    DoppelSeerRevealOne(Participant),
+    DoppelSeerRevealTwo(CenterPair),
     Werewolves,
     MinionTurn,
     MasonTurn,
@@ -173,7 +176,10 @@ impl Turn {
         match *self {
             //we only need the (*)Reveal states when the player is the (*)
             Ready => SeeRole(false),
-            SeeRole(_) => Werewolves,
+            SeeRole(_) => DoppelSeerTurn,
+            DoppelSeerTurn => Werewolves,
+            DoppelSeerRevealOne(_) => DoppelSeerTurn.next(),
+            DoppelSeerRevealTwo(_) => DoppelSeerTurn.next(),
             Werewolves => MinionTurn,
             MinionTurn => MasonTurn,
             MasonTurn => SeerTurn,
