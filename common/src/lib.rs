@@ -69,8 +69,49 @@ pub enum Role {
     Villager,
     Tanner,
     Hunter,
+    // DoppelWerewolf(Participant),
+    // DoppelMinion(Participant),
+    // DoppelRobber(Participant),
+    // DoppelMason(Participant),
+    // DoppelSeer(Participant),
+    // DoppelTroublemaker(Participant),
+    // DoppelDrunk(Participant),
+    // DoppelInsomniac(Participant),
+    DoppelVillager(Participant),
+    // DoppelTanner(Participant),
+    // DoppelHunter(Participant),
 }
 use Role::*;
+
+pub fn get_doppel_role(role: Role, participant:Participant) -> Role {
+    match role {
+        // Werewolf => DoppelWerewolf,
+        // Minion => DoppelMinion,
+        // Robber => DoppelRobber,
+        // Mason => DoppelMason,
+        // Seer => DoppelSeer,
+        // Troublemaker => DoppelTroublemaker,
+        // Drunk => DoppelDrunk,
+        // Insomniac => DoppelInsomniac,
+        Villager => DoppelVillager(participant),
+        // Tanner => DoppelTanner,
+        // Hunter => DoppelHunter,
+        // DoppelWerewolf(_) => DoppelWerewolf,
+        // DoppelMinion(_) => DoppelMinion,
+        // DoppelRobber(_) => DoppelRobber,
+        // DoppelMason(_) => DoppelMason,
+        // DoppelSeer(_) => DoppelSeer,
+        // DoppelTroublemaker(_) => DoppelTroublemaker,
+        // DoppelDrunk(_) => DoppelDrunk,
+        // DoppelInsomniac(_) => DoppelInsomniac,
+        DoppelVillager(_) => DoppelVillager(participant),
+        // DoppelTanner(_) => DoppelTanner,
+        // DoppelHunter(_) => DoppelHunter,
+        //TODO remove this line once all doppel roles are implemented
+        //so we get erros remininding us to fill this in for expansion roles
+        _ => DoppelVillager(participant)
+    }
+}
 
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -88,6 +129,20 @@ impl fmt::Display for Role {
                    Villager => "a Villager",
                    Tanner => "a Tanner",
                    Hunter => "a Hunter",
+                   //We'll assume don'y know what the doppelganger copied in the general case
+                //    DoppelWerewolf(_) |
+                //    DoppelMinion(_) |
+                //    DoppelMason(_) |
+                //    DoppelRobber(_) |
+                //    DoppelSeer(_) |
+                //    DoppelTroublemaker(_) |
+                //    DoppelDrunk(_) |
+                //    DoppelInsomniac(_) |
+                   DoppelVillager(_)
+                //    |
+                //    DoppelTanner(_) |
+                //    DoppelHunter(_)
+                    => "a Doppelganger",
                })
     }
 }
@@ -95,7 +150,7 @@ impl fmt::Display for Role {
 #[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Turn {
     Ready,
-    SeeRole,
+    SeeRole(bool),
     Werewolves,
     MinionTurn,
     MasonTurn,
@@ -119,8 +174,8 @@ impl Turn {
     pub fn next(&self) -> Turn {
         match *self {
             //we only need the (*)Reveal states when the player is the (*)
-            Ready => SeeRole,
-            SeeRole => Werewolves,
+            Ready => SeeRole(false),
+            SeeRole(_) => Werewolves,
             Werewolves => MinionTurn,
             MinionTurn => MasonTurn,
             MasonTurn => SeerTurn,
@@ -272,11 +327,18 @@ impl Knowledge {
             _ => (None, None),
         };
 
+        let true_claim = match role {
+            DoppelVillager(p) => DoppelSimple(p, Villager),
+            // DoppelTanner(p) => DoppelSimple(p, Tanner),
+            // DoppelHunter(p) => DoppelSimple(p, Hunter),
+            _ => Simple(role),
+        };
+
         Knowledge {
             known_werewolves: HashSet::new(),
             known_villagers: HashSet::new(),
             role,
-            true_claim: Simple(role),
+            true_claim,
             known_non_active: HashSet::new(),
             known_minion,
             known_tanner,
@@ -291,13 +353,21 @@ impl Knowledge {
 #[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
 pub enum Claim {
     Simple(Role),
+    DoppelSimple(Participant, Role),
     MasonAction(Option<Participant>),
+    DoppelMasonAction(Participant, Option<Participant>),
     RobberAction(Participant, Role),
+    DoppelRobberAction(Participant, Participant, Role),
     SeerRevealOneAction(Participant, Role),
+    DoppelSeerRevealOneAction(Participant, Participant, Role),
     SeerRevealTwoAction(CenterPair, Role, Role),
+    DoppelSeerRevealTwoAction(Participant, CenterPair, Role, Role),
     TroublemakerAction(Participant, Participant),
+    DoppelTroublemakerAction(Participant, Participant, Participant),
     InsomniacAction(Role),
+    DoppelInsomniacAction(Participant, Role),
     DrunkAction(CenterCard),
+    DoppelDrunkAction(Participant, CenterCard),
 }
 use Claim::*;
 
