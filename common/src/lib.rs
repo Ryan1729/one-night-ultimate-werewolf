@@ -336,8 +336,8 @@ impl Knowledge {
 
         let true_claim = match role {
             DoppelVillager(p) => DoppelSimple(p, Villager),
-            // DoppelTanner(p) => DoppelSimple(p, Tanner),
-            // DoppelHunter(p) => DoppelSimple(p, Hunter),
+            DoppelTanner(p) => DoppelSimple(p, Tanner),
+            DoppelHunter(p) => DoppelSimple(p, Hunter),
             _ => Simple(role),
         };
 
