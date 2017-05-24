@@ -7,6 +7,7 @@ use common::Turn::*;
 use common::Participant::*;
 use common::Claim::*;
 use common::CenterPair::*;
+use common::CenterCard::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 use std::collections::HashMap;
@@ -64,8 +65,6 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         ui_context: UIContext::new(),
     }
 }
-
-
 
 fn get_roles_and_knowledge(rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>, bool) {
@@ -789,7 +788,25 @@ and exchange your card with a card from the center.");
                         }
                     }
                 }
-            }
+            };
+
+            if let Some(doppel_hunter_participant) =
+                get_participant_by_role(state, |r| match r {
+                    &DoppelHunter(_) => true,
+                    _ => false,
+                }) {
+                if targets.contains(&doppel_hunter_participant) {
+                    if let Some(doppel_hunter_target) =
+                        state.votes
+                            .iter()
+                            .find(|&&(voter, _)| voter == doppel_hunter_participant)
+                            .map(|&(_, v)| v) {
+                        if !targets.contains(&doppel_hunter_target) {
+                            targets.push(doppel_hunter_target)
+                        }
+                    }
+                }
+            };
 
             if targets.len() == 0 {
                 (platform.print_xy)(10, 10, "Nobody died.");
@@ -821,6 +838,12 @@ and exchange your card with a card from the center.");
                                                                       } else {
                                                                           None
                                                                       });
+                let possible_dead_doppel_tanner =
+                    get_participant_by_role(state, |r| match r {
+                        &DoppelTanner(_) => true,
+                        _ => false,
+                    })
+                            .and_then(|p| if targets.contains(&p) { Some(p) } else { None });
 
                 if hit_werevoles_count >= 1 {
                     if hit_werevoles_count == 1 {
@@ -833,15 +856,12 @@ and exchange your card with a card from the center.");
                     (platform.print_xy)(10, 13, "Village team wins!");
 
                     if let Some(dead_tanner) = possible_dead_tanner {
-                        let pronoun = if dead_tanner == Player { "You" } else { "they" };
-                        (platform.print_xy)(10,
-                                            14,
-                                            &format!("{} died and {} were {}.",
-                                                     dead_tanner,
-                                                     pronoun,
-                                                     Tanner));
-                        (platform.print_xy)(10, 15, "Tanner wins too!");
+                        display_tanner_win(platform, dead_tanner, true);
                     }
+                    if let Some(dead_doppel_tanner) = possible_dead_doppel_tanner {
+                        display_doppel_tanner_win(platform, dead_doppel_tanner, true);
+                    }
+
                 } else {
                     let werewolves = get_werewolves(state);
 
@@ -850,18 +870,22 @@ and exchange your card with a card from the center.");
                                             12,
                                             "No werewolves died but a player was a werewolf!");
 
-                        if let Some(dead_tanner) = possible_dead_tanner {
-                            let pronoun = if dead_tanner == Player { "You" } else { "they" };
-                            (platform.print_xy)(10,
-                                                14,
-                                                &format!("{} died and {} were {}.",
-                                                         dead_tanner,
-                                                         pronoun,
-                                                         Tanner));
-                            (platform.print_xy)(10, 15, "Tanner wins!");
-                        } else {
-                            (platform.print_xy)(10, 13, "Werewolf team wins!");
-                        }
+                        match (possible_dead_tanner, possible_dead_doppel_tanner) {
+                            (None, None) => {
+                                (platform.print_xy)(10, 13, "Werewolf team wins!");
+                            }
+                            (Some(dead_tanner), None) => {
+                                display_tanner_win(platform, dead_tanner, false);
+                            }
+                            (None, Some(dead_doppel_tanner)) => {
+                                display_doppel_tanner_win(platform, dead_doppel_tanner, false);
+                            }
+                            (Some(dead_tanner), Some(dead_doppel_tanner)) => {
+                                display_tanner_win(platform, dead_tanner, false);
+                                display_doppel_tanner_win(platform, dead_doppel_tanner, true);
+
+                            }
+                        };
 
                     } else {
                         (platform.print_xy)(10,
@@ -872,28 +896,28 @@ and exchange your card with a card from the center.");
                             (platform.print_xy)(10, 13, "But there was a minion! The minion wins!");
 
                             if let Some(dead_tanner) = possible_dead_tanner {
-                                let pronoun = if dead_tanner == Player { "You" } else { "they" };
-                                (platform.print_xy)(10,
-                                                    14,
-                                                    &format!("{} died and {} were {}.",
-                                                             dead_tanner,
-                                                             pronoun,
-                                                             Tanner));
-                                (platform.print_xy)(10, 15, "Tanner wins too!");
-                            };
-                        } else {
-                            if let Some(dead_tanner) = possible_dead_tanner {
-                                let pronoun = if dead_tanner == Player { "You" } else { "they" };
-                                (platform.print_xy)(10,
-                                                    14,
-                                                    &format!("{} died and {} were {}.",
-                                                             dead_tanner,
-                                                             pronoun,
-                                                             Tanner));
-                                (platform.print_xy)(10, 15, "Tanner wins!");
-                            } else {
-                                (platform.print_xy)(10, 13, "Nobody wins!");
+                                display_tanner_win(platform, dead_tanner, true);
                             }
+                            if let Some(dead_doppel_tanner) = possible_dead_doppel_tanner {
+                                display_doppel_tanner_win(platform, dead_doppel_tanner, true);
+                            }
+                        } else {
+                            match (possible_dead_tanner, possible_dead_doppel_tanner) {
+                                (None, None) => {
+                                    (platform.print_xy)(10, 13, "Nobody wins!");
+                                }
+                                (Some(dead_tanner), None) => {
+                                    display_tanner_win(platform, dead_tanner, false);
+                                }
+                                (None, Some(dead_doppel_tanner)) => {
+                                    display_doppel_tanner_win(platform, dead_doppel_tanner, false);
+                                }
+                                (Some(dead_tanner), Some(dead_doppel_tanner)) => {
+                                    display_tanner_win(platform, dead_tanner, false);
+                                    display_doppel_tanner_win(platform, dead_doppel_tanner, true);
+
+                                }
+                            };
                         }
                     }
                 }
@@ -923,6 +947,42 @@ and exchange your card with a card from the center.");
     false
 }
 
+fn display_tanner_win(platform: &Platform, dead_tanner: Participant, addtional: bool) {
+    let pronoun = if dead_tanner == Player { "You" } else { "they" };
+    (platform.print_xy)(10,
+                        14,
+                        &format!("{} died and {} were {}.", dead_tanner, pronoun, Tanner));
+    if addtional {
+
+        (platform.print_xy)(10, 15, "Tanner wins too!");
+    } else {
+        (platform.print_xy)(10, 15, "Tanner wins!");
+    }
+}
+
+fn display_doppel_tanner_win(platform: &Platform,
+                             dead_doppel_tanner: Participant,
+                             addtional: bool) {
+    let pronoun = if dead_doppel_tanner == Player {
+        "You"
+    } else {
+        "they"
+    };
+    (platform.print_xy)(10,
+                        16,
+                        &format!("{} died and {} were {}.",
+                                 dead_doppel_tanner,
+                                 pronoun,
+                                 DoppelTanner(Player)));
+    if addtional {
+
+        (platform.print_xy)(10, 17, "DoppelTanner wins as well!");
+    } else {
+
+        (platform.print_xy)(10, 17, "DoppelTanner wins!");
+    }
+}
+
 fn list_werewolves(platform: &Platform, werewolves: &Vec<Participant>) {
     let len = werewolves.len();
 
@@ -949,6 +1009,39 @@ fn get_participant_with_role(state: &State, role: Role) -> Option<Participant> {
         linear_search(&state.cpu_roles, &role).map(|i| Cpu(i))
     }
 }
+
+fn get_participant_by_role<'a, F>(state: &'a State, mut f: F) -> Option<Participant>
+    where F: FnMut(&'a Role) -> bool
+{
+    if f(&state.player) {
+        Some(Player)
+    } else {
+        linear_search_by(&state.cpu_roles, f).map(|i| Cpu(i))
+    }
+}
+
+fn linear_search<T: PartialEq>(vector: &Vec<T>, thing: &T) -> Option<usize> {
+    for i in 0..vector.len() {
+        if thing == &vector[i] {
+            return Some(i);
+        }
+    }
+
+    None
+}
+
+fn linear_search_by<'a, F, T>(vector: &'a Vec<T>, mut f: F) -> Option<usize>
+    where F: FnMut(&'a T) -> bool
+{
+    for i in 0..vector.len() {
+        if f(&vector[i]) {
+            return Some(i);
+        }
+    }
+
+    None
+}
+
 
 fn apply_swaps(knowledge: &mut Knowledge) {
     //TODO maybe make this return a new type, "FinalKnowledge"?
@@ -1028,7 +1121,7 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
             //TODO better lying
             //equal probability of all plausible possibilities?
             Simple(Villager)
-        } else if knowledge.role == Minion {
+        } else if is_minion(knowledge.role) {
             if knowledge.known_werewolves.len() > 0 {
                 //TODO look at already made claims and try to cover for Werewolves?
                 Simple(Werewolf)
@@ -1036,7 +1129,7 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
                 //TODO try to get another player voted for
                 Simple(Villager)
             }
-        } else if knowledge.role == Tanner {
+        } else if is_tanner(knowledge.role) {
             //TODO try to get self voted for more convincingly
             Simple(Werewolf)
         } else {
@@ -1502,8 +1595,26 @@ fn count_votes(votes: &Vec<Participant>) -> Vec<Participant> {
 }
 
 fn is_werewolf(role: Role) -> bool {
-    //will be more complicated if we get to the expansions
-    role == Werewolf
+    match role {
+        Werewolf
+        // | DoppelWerewolf(_)
+        => true,
+        _ => false
+    }
+}
+fn is_minion(role: Role) -> bool {
+    match role {
+        Minion
+        // | DoppelMinion(_)
+        => true,
+        _ => false,
+    }
+}
+fn is_tanner(role: Role) -> bool {
+    match role {
+        Tanner | DoppelTanner(_) => true,
+        _ => false,
+    }
 }
 
 fn swap_roles(state: &mut State, p1: Participant, p2: Participant) {
@@ -1537,16 +1648,6 @@ unsafe fn get_center_role_ptr(state: &mut State, center_card: CenterCard) -> *mu
         Second => &mut state.cpu_roles[1],
         Third => &mut state.cpu_roles[2],
     }
-}
-
-fn linear_search<T: PartialEq>(vector: &Vec<T>, thing: &T) -> Option<usize> {
-    for i in 0..vector.len() {
-        if thing == &vector[i] {
-            return Some(i);
-        }
-    }
-
-    None
 }
 
 fn get_other_participants(state: &State, participant: Participant) -> Vec<Participant> {

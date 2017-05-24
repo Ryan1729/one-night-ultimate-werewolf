@@ -78,38 +78,38 @@ pub enum Role {
     // DoppelDrunk(Participant),
     // DoppelInsomniac(Participant),
     DoppelVillager(Participant),
-    // DoppelTanner(Participant),
-    // DoppelHunter(Participant),
+    DoppelTanner(Participant),
+    DoppelHunter(Participant),
 }
 use Role::*;
 
-pub fn get_doppel_role(role: Role, participant:Participant) -> Role {
+pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
     match role {
-        // Werewolf => DoppelWerewolf,
-        // Minion => DoppelMinion,
-        // Robber => DoppelRobber,
-        // Mason => DoppelMason,
-        // Seer => DoppelSeer,
-        // Troublemaker => DoppelTroublemaker,
-        // Drunk => DoppelDrunk,
-        // Insomniac => DoppelInsomniac,
+        // Werewolf => DoppelWerewolf(participant),
+        // Minion => DoppelMinion(participant),
+        // Robber => DoppelRobber(participant),
+        // Mason => DoppelMason(participant),
+        // Seer => DoppelSeer(participant),
+        // Troublemaker => DoppelTroublemaker(participant),
+        // Drunk => DoppelDrunk(participant),
+        // Insomniac => DoppelInsomniac(participant),
         Villager => DoppelVillager(participant),
-        // Tanner => DoppelTanner,
-        // Hunter => DoppelHunter,
-        // DoppelWerewolf(_) => DoppelWerewolf,
-        // DoppelMinion(_) => DoppelMinion,
-        // DoppelRobber(_) => DoppelRobber,
-        // DoppelMason(_) => DoppelMason,
-        // DoppelSeer(_) => DoppelSeer,
-        // DoppelTroublemaker(_) => DoppelTroublemaker,
-        // DoppelDrunk(_) => DoppelDrunk,
-        // DoppelInsomniac(_) => DoppelInsomniac,
+        Tanner => DoppelTanner(participant),
+        Hunter => DoppelHunter(participant),
+        // DoppelWerewolf(_) => DoppelWerewolf(participant),
+        // DoppelMinion(_) => DoppelMinion(participant),
+        // DoppelRobber(_) => DoppelRobber(participant),
+        // DoppelMason(_) => DoppelMason(participant),
+        // DoppelSeer(_) => DoppelSeer(participant),
+        // DoppelTroublemaker(_) => DoppelTroublemaker(participant),
+        // DoppelDrunk(_) => DoppelDrunk(participant),
+        // DoppelInsomniac(_) => DoppelInsomniac(participant),
         DoppelVillager(_) => DoppelVillager(participant),
-        // DoppelTanner(_) => DoppelTanner,
-        // DoppelHunter(_) => DoppelHunter,
+        DoppelTanner(_) => DoppelTanner(participant),
+        DoppelHunter(_) => DoppelHunter(participant),
         //TODO remove this line once all doppel roles are implemented
         //so we get erros remininding us to fill this in for expansion roles
-        _ => DoppelVillager(participant)
+        _ => DoppelVillager(participant),
     }
 }
 
@@ -130,19 +130,17 @@ impl fmt::Display for Role {
                    Tanner => "a Tanner",
                    Hunter => "a Hunter",
                    //We'll assume don'y know what the doppelganger copied in the general case
-                //    DoppelWerewolf(_) |
-                //    DoppelMinion(_) |
-                //    DoppelMason(_) |
-                //    DoppelRobber(_) |
-                //    DoppelSeer(_) |
-                //    DoppelTroublemaker(_) |
-                //    DoppelDrunk(_) |
-                //    DoppelInsomniac(_) |
-                   DoppelVillager(_)
-                //    |
-                //    DoppelTanner(_) |
-                //    DoppelHunter(_)
-                    => "a Doppelganger",
+                   //    DoppelWerewolf(_) |
+                   //    DoppelMinion(_) |
+                   //    DoppelMason(_) |
+                   //    DoppelRobber(_) |
+                   //    DoppelSeer(_) |
+                   //    DoppelTroublemaker(_) |
+                   //    DoppelDrunk(_) |
+                   //    DoppelInsomniac(_) |
+                   DoppelVillager(_) |
+                   DoppelTanner(_) |
+                   DoppelHunter(_) => "a Doppelganger",
                })
     }
 }
@@ -310,6 +308,9 @@ pub struct Knowledge {
     pub role: Role,
     pub true_claim: Claim,
     pub known_non_active: HashSet<Role>,
+    //TODO should this line be here?
+    //pub known_doppel: Option<Participant>,
+    //TODO should these account for the possibity of a /Doppel(Minion|Tanner)/ ?
     pub known_minion: Option<Participant>,
     pub known_tanner: Option<Participant>,
     pub robber_swap: Option<(Participant, Participant, Role)>,
