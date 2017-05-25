@@ -258,6 +258,20 @@ pub fn game_update_and_render(platform: &Platform,
                             left_mouse_released,
                             pair);
         }
+        DoppelRobberTurn => {
+            robber_turn(state,
+                        platform,
+                        left_mouse_pressed,
+                        left_mouse_released,
+                        DoppelRobberReveal,
+                        doppel_robber_action,
+                        is_player_doppel_robber,
+                        get_doppel_robber_index,
+                        "DoppelRobber");
+        }
+        DoppelRobberReveal => {
+            reveal_player(state, platform, left_mouse_pressed, left_mouse_released);
+        }
         Werewolves => {
             let werewolves = get_werewolves(state);
 
@@ -408,56 +422,18 @@ your thumb so the Minion can see who you are.");
                             pair);
         }
         RobberTurn => {
-            if state.initial_player == Robber {
-                (platform.print_xy)(15,
-                                    3,
-                                    "Robber, wake up.
-You may exchange your card with another player’s card,
-and then view your new card.");
-
-
-                let choice = pick_cpu_player_or_skip(platform,
-                                                     state,
-                                                     left_mouse_pressed,
-                                                     left_mouse_released);
-                match choice {
-                    Skip => {
-                        state.turn = state.turn.next();
-                    }
-                    Chosen(chosen) => {
-                        swap_roles(state, Player, chosen);
-
-                        state.turn = RobberReveal;
-                    }
-                    NoChoice => {}
-                }
-            } else {
-                if let Some(robber_index) = linear_search(&state.initial_cpu_roles, &Robber) {
-                    let robber = Cpu(robber_index);
-
-                    let other_participants = get_other_participants(state, robber);
-                    if let Some(&chosen) = state.rng.choose(&other_participants) {
-                        swap_roles(state, robber, chosen);
-
-                        if let (Some(new_role), Some(knowledge)) =
-                            (get_role(state, robber), get_knowledge_mut(state, robber)) {
-
-                            knowledge.role = new_role;
-                            knowledge.true_claim = RobberAction(chosen, new_role);
-                            knowledge.robber_swap = Some((robber, chosen, new_role));
-                        }
-                    }
-                }
-
-                state.turn = state.turn.next();
-            };
+            robber_turn(state,
+                        platform,
+                        left_mouse_pressed,
+                        left_mouse_released,
+                        RobberReveal,
+                        robber_action,
+                        is_player_robber,
+                        get_robber_index,
+                        "Robber");
         }
         RobberReveal => {
-            (platform.print_xy)(10, 10, &format!("You are now {}.", state.player));
-
-            if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
-                state.turn = state.turn.next();
-            }
+            reveal_player(state, platform, left_mouse_pressed, left_mouse_released);
         }
         TroublemakerTurn => {
             if state.initial_player == Troublemaker {
@@ -895,6 +871,108 @@ and exchange your card with a card from the center.");
     false
 }
 
+fn robber_action(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
+    RobberAction(p, r)
+}
+fn doppel_robber_action(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
+
+
+    let participant = robber_doppel_target_or_player(get_role(state, participant)
+                                                         .unwrap_or(Villager));
+    DoppelRobberAction(participant, p, r)
+}
+
+
+fn robber_doppel_target_or_player(role: Role) -> Participant {
+    match role {
+        DoppelRobber(p) => p,
+        _ => Player,
+    }
+}
+
+
+fn reveal_player(state: &mut State,
+                 platform: &Platform,
+                 left_mouse_pressed: bool,
+                 left_mouse_released: bool) {
+    (platform.print_xy)(10, 10, &format!("You are now {}.", state.player));
+
+    if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+        state.turn = state.turn.next();
+    }
+}
+fn robber_turn(state: &mut State,
+               platform: &Platform,
+               left_mouse_pressed: bool,
+               left_mouse_released: bool,
+               reveal_turn: Turn,
+               action: fn(&State, Participant, Participant, Role) -> Claim,
+               player_pred: fn(&State) -> bool,
+               get_cpu_index: fn(&State) -> Option<usize>,
+               name: &str) {
+    if player_pred(state) {
+        (platform.print_xy)(15,
+                            3,
+                            &format!("{}, wake up.
+You may exchange your card with another player’s card,
+and then view your new card.",
+                                     name));
+
+
+        let choice =
+            pick_cpu_player_or_skip(platform, state, left_mouse_pressed, left_mouse_released);
+        match choice {
+            Skip => {
+                state.turn = state.turn.next();
+            }
+            Chosen(chosen) => {
+                swap_roles(state, Player, chosen);
+
+                state.turn = reveal_turn;
+            }
+            NoChoice => {}
+        }
+    } else {
+        if let Some(robber_index) = get_cpu_index(state) {
+            let robber = Cpu(robber_index);
+
+            let other_participants = get_other_participants(state, robber);
+            if let Some(&chosen) = state.rng.choose(&other_participants) {
+                swap_roles(state, robber, chosen);
+
+                if let Some(new_role) = get_role(state, robber) {
+                    let true_claim = action(state, robber, chosen, new_role);
+                    if let Some(knowledge) = get_knowledge_mut(state, robber) {
+                        knowledge.role = new_role;
+                        knowledge.true_claim = true_claim;
+                        knowledge.robber_swap = Some((robber, chosen, new_role));
+                    }
+                }
+            }
+        }
+
+        state.turn = state.turn.next();
+    };
+}
+fn is_player_robber(state: &State) -> bool {
+    state.initial_player == Robber
+}
+fn is_player_doppel_robber(state: &State) -> bool {
+    match state.player {
+        DoppelRobber(_) => true,
+        _ => false,
+    }
+}
+fn get_robber_index(state: &State) -> Option<usize> {
+    linear_search(&state.initial_cpu_roles, &Robber)
+}
+fn get_doppel_robber_index(state: &State) -> Option<usize> {
+    linear_search_by(&state.cpu_roles, |r| match r {
+        &DoppelRobber(_) => true,
+        _ => false,
+    })
+}
+
 fn reveal_one_turn(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
     SeerRevealOneAction(p, r)
 }
@@ -1179,6 +1257,9 @@ fn linear_search_by<'a, F, T>(vector: &'a Vec<T>, mut f: F) -> Option<usize>
 
 fn apply_swaps(knowledge: &mut Knowledge) {
     //TODO maybe make this return a new type, "FinalKnowledge"?
+
+    //TODO Do wwe need doppel swapping? There will only ever be one and it will
+    //happen before a seer happens.
     if let Some((robber, target, previous_role)) = knowledge.robber_swap {
 
         knowledge.role = previous_role;
@@ -1201,6 +1282,8 @@ fn apply_swaps(knowledge: &mut Knowledge) {
         swap_team_if_known(knowledge, target1);
         swap_team_if_known(knowledge, target2);
     }
+
+    //TODO Do we need Drunk swapping (or any swapping?!) if the cpus never trusst anyone?
 }
 
 fn swap_team_if_known(knowledge: &mut Knowledge, participant: Participant) {
