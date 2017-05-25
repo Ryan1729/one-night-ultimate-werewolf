@@ -292,6 +292,16 @@ pub fn game_update_and_render(platform: &Platform,
                                        DoppelTroublemakerTurn,
                                        first_choice);
         }
+        DoppelDrunkTurn => {
+            drunk_turn(state,
+                       platform,
+                       left_mouse_pressed,
+                       left_mouse_released,
+                       is_player_doppel_drunk,
+                       get_doppel_drunk_index,
+                       doppel_drunk_action,
+                       "DoppelDrunk");
+        }
         DoppelMinionTurn => {
             minion_turn(state,
                         platform,
@@ -466,46 +476,14 @@ pub fn game_update_and_render(platform: &Platform,
                                        first_choice);
         }
         DrunkTurn => {
-            if state.initial_player == Drunk {
-                (platform.print_xy)(15,
-                                    3,
-                                    "Drunk, wake up
-and exchange your card with a card from the center.");
-
-                let choice = pick_displayable(platform,
-                                              state,
-                                              left_mouse_pressed,
-                                              left_mouse_released,
-                                              &CenterCard::all_values());
-                match choice {
-                    Some(chosen) => {
-                        swap_role_with_center(state, Player, chosen);
-
-                        if let Some(knowledge) = get_knowledge_mut(state, Player) {
-                            knowledge.true_claim = DrunkAction(chosen);
-                            knowledge.drunk_swap = Some((Player, chosen));
-                        }
-
-                        state.turn = state.turn.next();
-                    }
-                    None => {}
-                }
-            } else {
-                if let Some(drunk_index) = linear_search(&state.initial_cpu_roles, &Drunk) {
-                    let drunk = Cpu(drunk_index);
-
-                    let target = state.rng.gen::<CenterCard>();
-
-                    swap_role_with_center(state, drunk, target);
-
-                    if let Some(knowledge) = get_knowledge_mut(state, drunk) {
-                        knowledge.true_claim = DrunkAction(target);
-                        knowledge.drunk_swap = Some((drunk, target));
-                    }
-                }
-
-                state.turn = state.turn.next();
-            };
+            drunk_turn(state,
+                       platform,
+                       left_mouse_pressed,
+                       left_mouse_released,
+                       is_player_drunk,
+                       get_drunk_index,
+                       drunk_action,
+                       "Drunk");
         }
         InsomniacTurn => {
             if state.initial_player == Insomniac {
@@ -822,6 +800,95 @@ and exchange your card with a card from the center.");
     false
 }
 
+fn is_player_drunk(state: &State) -> bool {
+    state.initial_player == Drunk
+}
+
+fn is_player_doppel_drunk(state: &State) -> bool {
+    match state.player {
+        DoppelDrunk(_) => true,
+        _ => false,
+    }
+}
+
+fn get_drunk_index(state: &State) -> Option<usize> {
+    linear_search(&state.initial_cpu_roles, &Drunk)
+}
+fn get_doppel_drunk_index(state: &State) -> Option<usize> {
+    linear_search_by(&state.cpu_roles, |r| match r {
+        &DoppelDrunk(_) => true,
+        _ => false,
+    })
+}
+
+fn drunk_action(_: &State, _: Participant, c: CenterCard) -> Claim {
+    DrunkAction(c)
+}
+fn doppel_drunk_action(state: &State, participant: Participant, c: CenterCard) -> Claim {
+    let participant = drunk_doppel_target_or_player(get_role(state, participant)
+                                                        .unwrap_or(Villager));
+    DoppelDrunkAction(participant, c)
+}
+
+fn drunk_doppel_target_or_player(role: Role) -> Participant {
+    match role {
+        DoppelDrunk(p) => p,
+        _ => Player,
+    }
+}
+
+fn drunk_turn(state: &mut State,
+              platform: &Platform,
+              left_mouse_pressed: bool,
+              left_mouse_released: bool,
+              player_pred: fn(&State) -> bool,
+              get_cpu_index: fn(&State) -> Option<usize>,
+              action: fn(&State, Participant, CenterCard) -> Claim,
+              name: &str) {
+    if player_pred(state) {
+        (platform.print_xy)(15,
+                            3,
+                            "Drunk, wake up
+and exchange your card with a card from the center.");
+
+        let choice = pick_displayable(platform,
+                                      state,
+                                      left_mouse_pressed,
+                                      left_mouse_released,
+                                      &CenterCard::all_values());
+        match choice {
+            Some(chosen) => {
+                swap_role_with_center(state, Player, chosen);
+
+                let true_claim = action(state, Player, chosen);
+                if let Some(knowledge) = get_knowledge_mut(state, Player) {
+                    knowledge.true_claim = true_claim;
+                    knowledge.drunk_swap = Some((Player, chosen));
+                }
+
+                state.turn = state.turn.next();
+            }
+            None => {}
+        }
+    } else {
+        if let Some(drunk_index) = get_cpu_index(state) {
+            let drunk = Cpu(drunk_index);
+
+            let target = state.rng.gen::<CenterCard>();
+
+            swap_role_with_center(state, drunk, target);
+
+            let true_claim = action(state, drunk, target);
+            if let Some(knowledge) = get_knowledge_mut(state, drunk) {
+                knowledge.true_claim = true_claim;
+                knowledge.drunk_swap = Some((drunk, target));
+            }
+        }
+
+        state.turn = state.turn.next();
+    };
+}
+
 fn is_player_troublemaker(state: &State) -> bool {
     state.initial_player == Troublemaker
 }
@@ -912,7 +979,7 @@ fn troublemaker_turn(state: &mut State,
                      second_choice: fn(Participant) -> Turn,
                      action: fn(&State, Participant, Participant, Participant) -> Claim,
                      name: &str) {
-    if state.initial_player == Troublemaker {
+    if player_pred(state) {
         (platform.print_xy)(15,
                             3,
                             "Troublemaker, wake up.
@@ -933,7 +1000,7 @@ You may exchange cards between two other players.");
             NoChoice => {}
         }
     } else {
-        if let Some(troublemaker_index) = linear_search(&state.initial_cpu_roles, &Troublemaker) {
+        if let Some(troublemaker_index) = get_cpu_index(state) {
             let troublemaker = Cpu(troublemaker_index);
 
             let mut other_participants = get_other_participants(state, troublemaker);

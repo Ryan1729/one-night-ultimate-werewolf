@@ -75,7 +75,7 @@ pub enum Role {
     DoppelMason(Participant),
     DoppelSeer(Participant),
     DoppelTroublemaker(Participant),
-    // DoppelDrunk(Participant),
+    DoppelDrunk(Participant),
     // DoppelInsomniac(Participant),
     DoppelVillager(Participant),
     DoppelTanner(Participant),
@@ -91,7 +91,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         Mason => DoppelMason(participant),
         Seer => DoppelSeer(participant),
         Troublemaker => DoppelTroublemaker(participant),
-        // Drunk => DoppelDrunk(participant),
+        Drunk => DoppelDrunk(participant),
         // Insomniac => DoppelInsomniac(participant),
         Villager => DoppelVillager(participant),
         Tanner => DoppelTanner(participant),
@@ -102,7 +102,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         DoppelMason(_) => DoppelMason(participant),
         DoppelSeer(_) => DoppelSeer(participant),
         DoppelTroublemaker(_) => DoppelTroublemaker(participant),
-        // DoppelDrunk(_) => DoppelDrunk(participant),
+        DoppelDrunk(_) => DoppelDrunk(participant),
         // DoppelInsomniac(_) => DoppelInsomniac(participant),
         DoppelVillager(_) => DoppelVillager(participant),
         DoppelTanner(_) => DoppelTanner(participant),
@@ -136,7 +136,7 @@ impl fmt::Display for Role {
                       DoppelRobber(_) |
                       DoppelSeer(_) |
                       DoppelTroublemaker(_) |
-                   //    DoppelDrunk(_) |
+                      DoppelDrunk(_) |
                    //    DoppelInsomniac(_) |
                    DoppelVillager(_) |
                    DoppelTanner(_) |
@@ -156,6 +156,7 @@ pub enum Turn {
     DoppelRobberReveal,
     DoppelTroublemakerTurn,
     DoppelTroublemakerSecondChoice(Participant),
+    DoppelDrunkTurn,
     DoppelMinionTurn,
     Werewolves,
     MinionTurn,
@@ -188,7 +189,8 @@ impl Turn {
             DoppelRobberTurn => DoppelTroublemakerTurn,
             DoppelRobberReveal => DoppelRobberTurn.next(),
             DoppelTroublemakerSecondChoice(_) => DoppelTroublemakerTurn.next(),
-            DoppelTroublemakerTurn => DoppelMinionTurn,
+            DoppelTroublemakerTurn => DoppelDrunkTurn,
+            DoppelDrunkTurn => DoppelMinionTurn,
             DoppelMinionTurn => Werewolves,
             Werewolves => MinionTurn,
             MinionTurn => MasonTurn,
