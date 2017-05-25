@@ -486,28 +486,24 @@ pub fn game_update_and_render(platform: &Platform,
                        "Drunk");
         }
         InsomniacTurn => {
-            if state.initial_player == Insomniac {
-                (platform.print_xy)(15, 3, "Insomniac, wake up and look at your card.");
-
-                (platform.print_xy)(15, 5, &format!("You are {}", state.player));
-                state.player_knowledge.true_claim = InsomniacAction(state.player);
-
-                if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
-                    state.turn = state.turn.next();
-                }
-            } else {
-                if let Some(i) = linear_search(&state.initial_cpu_roles, &Insomniac) {
-                    let knowledge = &mut state.cpu_knowledge[i];
-                    knowledge.insomniac_peek = true;
-
-                    if let Some(&role) = state.cpu_roles.get(i) {
-                        knowledge.true_claim = InsomniacAction(role);
-                        knowledge.role = role;
-                    }
-                }
-
-                state.turn = state.turn.next();
-            }
+            insomniac_turn(state,
+                           platform,
+                           left_mouse_pressed,
+                           left_mouse_released,
+                           is_player_insomniac,
+                           get_insomniac_index,
+                           insomniac_action,
+                           "Insomniac");
+        }
+        DoppelInsomniacTurn => {
+            insomniac_turn(state,
+                           platform,
+                           left_mouse_pressed,
+                           left_mouse_released,
+                           is_player_doppel_insomniac,
+                           get_doppel_insomniac_index,
+                           doppel_insomniac_action,
+                           "DoppelInsomniac");
         }
         BeginDiscussion => {
             state.claims.clear();
@@ -798,6 +794,80 @@ pub fn game_update_and_render(platform: &Platform,
     draw(platform, state);
 
     false
+}
+
+fn is_player_insomniac(state: &State) -> bool {
+    state.initial_player == Insomniac
+}
+
+fn is_player_doppel_insomniac(state: &State) -> bool {
+    match state.player {
+        DoppelInsomniac(_) => true,
+        _ => false,
+    }
+}
+
+fn get_insomniac_index(state: &State) -> Option<usize> {
+    linear_search(&state.initial_cpu_roles, &Insomniac)
+}
+fn get_doppel_insomniac_index(state: &State) -> Option<usize> {
+    linear_search_by(&state.cpu_roles, |r| match r {
+        &DoppelInsomniac(_) => true,
+        _ => false,
+    })
+}
+
+fn insomniac_action(_: &State, _: Participant, r: Role) -> Claim {
+    InsomniacAction(r)
+}
+fn doppel_insomniac_action(state: &State, participant: Participant, r: Role) -> Claim {
+    let participant = insomniac_doppel_target_or_player(get_role(state, participant)
+                                                            .unwrap_or(Villager));
+    DoppelInsomniacAction(participant, r)
+}
+
+fn insomniac_doppel_target_or_player(role: Role) -> Participant {
+    match role {
+        DoppelInsomniac(p) => p,
+        _ => Player,
+    }
+}
+
+fn insomniac_turn(state: &mut State,
+                  platform: &Platform,
+                  left_mouse_pressed: bool,
+                  left_mouse_released: bool,
+                  player_pred: fn(&State) -> bool,
+                  get_cpu_index: fn(&State) -> Option<usize>,
+                  action: fn(&State, Participant, Role) -> Claim,
+                  name: &str) {
+
+    if player_pred(state) {
+        (platform.print_xy)(15, 3, "Insomniac, wake up and look at your card.");
+
+        (platform.print_xy)(15, 5, &format!("You are {}", state.player));
+        state.player_knowledge.true_claim = action(state, Player, state.player);
+
+        if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+            state.turn = state.turn.next();
+        }
+    } else {
+        if let Some(i) = get_cpu_index(state) {
+
+            if let Some(&role) = state.cpu_roles.get(i) {
+                let true_claim = action(state, Player, role);
+                if let Some(knowledge) = state.cpu_knowledge.get_mut(i) {
+
+                    knowledge.true_claim = true_claim;
+                    knowledge.insomniac_peek = true;
+                    knowledge.role = role;
+                }
+            }
+        }
+
+        state.turn = state.turn.next();
+    }
+
 }
 
 fn is_player_drunk(state: &State) -> bool {

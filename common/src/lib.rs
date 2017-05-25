@@ -58,6 +58,7 @@ impl fmt::Debug for State {
 
 #[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord, Hash)]
 pub enum Role {
+    //TODO before add ing expansions, it should be made much easier to add a role. 
     Werewolf,
     Minion,
     Robber,
@@ -76,7 +77,7 @@ pub enum Role {
     DoppelSeer(Participant),
     DoppelTroublemaker(Participant),
     DoppelDrunk(Participant),
-    // DoppelInsomniac(Participant),
+    DoppelInsomniac(Participant),
     DoppelVillager(Participant),
     DoppelTanner(Participant),
     DoppelHunter(Participant),
@@ -92,7 +93,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         Seer => DoppelSeer(participant),
         Troublemaker => DoppelTroublemaker(participant),
         Drunk => DoppelDrunk(participant),
-        // Insomniac => DoppelInsomniac(participant),
+        Insomniac => DoppelInsomniac(participant),
         Villager => DoppelVillager(participant),
         Tanner => DoppelTanner(participant),
         Hunter => DoppelHunter(participant),
@@ -103,7 +104,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         DoppelSeer(_) => DoppelSeer(participant),
         DoppelTroublemaker(_) => DoppelTroublemaker(participant),
         DoppelDrunk(_) => DoppelDrunk(participant),
-        // DoppelInsomniac(_) => DoppelInsomniac(participant),
+        DoppelInsomniac(_) => DoppelInsomniac(participant),
         DoppelVillager(_) => DoppelVillager(participant),
         DoppelTanner(_) => DoppelTanner(participant),
         DoppelHunter(_) => DoppelHunter(participant),
@@ -130,14 +131,14 @@ impl fmt::Display for Role {
                    Tanner => "a Tanner",
                    Hunter => "a Hunter",
                    //We'll assume don't know what the doppelganger copied in the general case
-                      DoppelWerewolf(_) |
-                      DoppelMinion(_) |
-                      DoppelMason(_) |
-                      DoppelRobber(_) |
-                      DoppelSeer(_) |
-                      DoppelTroublemaker(_) |
-                      DoppelDrunk(_) |
-                   //    DoppelInsomniac(_) |
+                   DoppelWerewolf(_) |
+                   DoppelMinion(_) |
+                   DoppelMason(_) |
+                   DoppelRobber(_) |
+                   DoppelSeer(_) |
+                   DoppelTroublemaker(_) |
+                   DoppelDrunk(_) |
+                   DoppelInsomniac(_) |
                    DoppelVillager(_) |
                    DoppelTanner(_) |
                    DoppelHunter(_) => "a Doppelganger",
@@ -170,6 +171,7 @@ pub enum Turn {
     TroublemakerSecondChoice(Participant),
     DrunkTurn,
     InsomniacTurn,
+    DoppelInsomniacTurn,
     BeginDiscussion,
     Discuss,
     Vote,
@@ -203,7 +205,8 @@ impl Turn {
             TroublemakerSecondChoice(_) => TroublemakerTurn.next(),
             TroublemakerTurn => DrunkTurn,
             DrunkTurn => InsomniacTurn,
-            InsomniacTurn => BeginDiscussion,
+            InsomniacTurn => DoppelInsomniacTurn,
+            DoppelInsomniacTurn => BeginDiscussion,
             BeginDiscussion => Discuss,
             Discuss => Vote,
             Vote => Resolution,
