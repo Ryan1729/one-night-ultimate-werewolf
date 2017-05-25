@@ -272,6 +272,26 @@ pub fn game_update_and_render(platform: &Platform,
         DoppelRobberReveal => {
             reveal_player(state, platform, left_mouse_pressed, left_mouse_released);
         }
+        DoppelTroublemakerTurn => {
+            troublemaker_turn(state,
+                              platform,
+                              left_mouse_pressed,
+                              left_mouse_released,
+                              is_player_doppel_troublemaker,
+                              get_doppel_troublemaker_index,
+                              DoppelTroublemakerSecondChoice,
+                              doppel_troublemaker_action,
+                              "DoppelTroublemaker");
+        }
+        DoppelTroublemakerSecondChoice(first_choice) => {
+            troublemaker_second_choice(state,
+                                       platform,
+                                       left_mouse_pressed,
+                                       left_mouse_released,
+                                       doppel_troublemaker_action,
+                                       DoppelTroublemakerTurn,
+                                       first_choice);
+        }
         DoppelMinionTurn => {
             minion_turn(state,
                         platform,
@@ -426,83 +446,24 @@ pub fn game_update_and_render(platform: &Platform,
             reveal_player(state, platform, left_mouse_pressed, left_mouse_released);
         }
         TroublemakerTurn => {
-            if state.initial_player == Troublemaker {
-                (platform.print_xy)(15,
-                                    3,
-                                    "Troublemaker, wake up.
- You may exchange cards between two other players.");
-
-                (platform.print_xy)(15, 5, "Choose the first other player:");
-
-
-                let choice = pick_cpu_player_or_skip(platform,
-                                                     state,
-                                                     left_mouse_pressed,
-                                                     left_mouse_released);
-                match choice {
-                    Skip => {
-                        state.turn = state.turn.next();
-                    }
-                    Chosen(chosen) => {
-                        state.turn = TroublemakerSecondChoice(chosen);
-                    }
-                    NoChoice => {}
-                }
-            } else {
-                if let Some(troublemaker_index) =
-                    linear_search(&state.initial_cpu_roles, &Troublemaker) {
-                    let troublemaker = Cpu(troublemaker_index);
-
-                    let mut other_participants = get_other_participants(state, troublemaker);
-                    state.rng.shuffle(&mut other_participants);
-
-                    if let (Some(first_choice), Some(second_choice)) =
-                        (other_participants.pop(), other_participants.pop()) {
-                        swap_roles(state, first_choice, second_choice);
-
-                        if let Some(knowledge) = get_knowledge_mut(state, troublemaker) {
-                            knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
-                            knowledge.troublemaker_swap = Some((first_choice, second_choice));
-                        }
-                    }
-                }
-
-                state.turn = state.turn.next();
-            };
+            troublemaker_turn(state,
+                              platform,
+                              left_mouse_pressed,
+                              left_mouse_released,
+                              is_player_troublemaker,
+                              get_troublemaker_index,
+                              TroublemakerSecondChoice,
+                              troublemaker_action,
+                              "Troublemaker");
         }
         TroublemakerSecondChoice(first_choice) => {
-            (platform.print_xy)(15, 5, "Choose the second other player:");
-
-            let remaining_options = get_cpu_participants(state)
-                .iter()
-                .filter(|&&p| p != first_choice)
-                .map(|&p| p)
-                .collect();
-            if let Some(second_choice) =
-                pick_displayable(platform,
-                                 state,
-                                 left_mouse_pressed,
-                                 left_mouse_released,
-                                 &remaining_options) {
-                swap_roles(state, first_choice, second_choice);
-                state.player_knowledge.true_claim = TroublemakerAction(first_choice, second_choice);
-
-                state.turn = state.turn.next();
-            };
-            if do_button(platform,
-                         &mut state.ui_context,
-                         &ButtonSpec {
-                              x: 0,
-                              y: 8,
-                              w: 11,
-                              h: 3,
-                              text: "Back".to_string(),
-                              id: 11,
-                          },
-                         left_mouse_pressed,
-                         left_mouse_released) {
-                state.turn = TroublemakerTurn;
-            }
+            troublemaker_second_choice(state,
+                                       platform,
+                                       left_mouse_pressed,
+                                       left_mouse_released,
+                                       troublemaker_action,
+                                       TroublemakerTurn,
+                                       first_choice);
         }
         DrunkTurn => {
             if state.initial_player == Drunk {
@@ -861,6 +822,139 @@ and exchange your card with a card from the center.");
     false
 }
 
+fn is_player_troublemaker(state: &State) -> bool {
+    state.initial_player == Troublemaker
+}
+
+fn is_player_doppel_troublemaker(state: &State) -> bool {
+    match state.player {
+        DoppelTroublemaker(_) => true,
+        _ => false,
+    }
+}
+
+fn get_troublemaker_index(state: &State) -> Option<usize> {
+    linear_search(&state.initial_cpu_roles, &Troublemaker)
+}
+fn get_doppel_troublemaker_index(state: &State) -> Option<usize> {
+    linear_search_by(&state.cpu_roles, |r| match r {
+        &DoppelTroublemaker(_) => true,
+        _ => false,
+    })
+}
+
+fn troublemaker_action(_: &State, _: Participant, p1: Participant, p2: Participant) -> Claim {
+    TroublemakerAction(p1, p2)
+}
+fn doppel_troublemaker_action(state: &State,
+                              participant: Participant,
+                              p1: Participant,
+                              p2: Participant)
+                              -> Claim {
+    let participant = troublemaker_doppel_target_or_player(get_role(state, participant)
+                                                               .unwrap_or(Villager));
+    DoppelTroublemakerAction(participant, p1, p2)
+}
+
+fn troublemaker_doppel_target_or_player(role: Role) -> Participant {
+    match role {
+        DoppelTroublemaker(p) => p,
+        _ => Player,
+    }
+}
+
+fn troublemaker_second_choice(state: &mut State,
+                              platform: &Platform,
+                              left_mouse_pressed: bool,
+                              left_mouse_released: bool,
+                              action: fn(&State, Participant, Participant, Participant) -> Claim,
+                              back_turn: Turn,
+                              first_choice: Participant) {
+    (platform.print_xy)(15, 5, "Choose the second other player:");
+
+    let remaining_options = get_cpu_participants(state)
+        .iter()
+        .filter(|&&p| p != first_choice)
+        .map(|&p| p)
+        .collect();
+    if let Some(second_choice) =
+        pick_displayable(platform,
+                         state,
+                         left_mouse_pressed,
+                         left_mouse_released,
+                         &remaining_options) {
+        swap_roles(state, first_choice, second_choice);
+        state.player_knowledge.true_claim = action(state, Player, first_choice, second_choice);
+
+        state.turn = state.turn.next();
+    };
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &ButtonSpec {
+                      x: 0,
+                      y: 8,
+                      w: 11,
+                      h: 3,
+                      text: "Back".to_string(),
+                      id: 11,
+                  },
+                 left_mouse_pressed,
+                 left_mouse_released) {
+        state.turn = back_turn;
+    }
+}
+fn troublemaker_turn(state: &mut State,
+                     platform: &Platform,
+                     left_mouse_pressed: bool,
+                     left_mouse_released: bool,
+                     player_pred: fn(&State) -> bool,
+                     get_cpu_index: fn(&State) -> Option<usize>,
+                     second_choice: fn(Participant) -> Turn,
+                     action: fn(&State, Participant, Participant, Participant) -> Claim,
+                     name: &str) {
+    if state.initial_player == Troublemaker {
+        (platform.print_xy)(15,
+                            3,
+                            "Troublemaker, wake up.
+You may exchange cards between two other players.");
+
+        (platform.print_xy)(15, 5, "Choose the first other player:");
+
+
+        let choice =
+            pick_cpu_player_or_skip(platform, state, left_mouse_pressed, left_mouse_released);
+        match choice {
+            Skip => {
+                state.turn = state.turn.next();
+            }
+            Chosen(chosen) => {
+                state.turn = second_choice(chosen);
+            }
+            NoChoice => {}
+        }
+    } else {
+        if let Some(troublemaker_index) = linear_search(&state.initial_cpu_roles, &Troublemaker) {
+            let troublemaker = Cpu(troublemaker_index);
+
+            let mut other_participants = get_other_participants(state, troublemaker);
+            state.rng.shuffle(&mut other_participants);
+
+            if let (Some(first_choice), Some(second_choice)) =
+                (other_participants.pop(), other_participants.pop()) {
+                swap_roles(state, first_choice, second_choice);
+
+                let true_claim = action(state, troublemaker, first_choice, second_choice);
+                if let Some(knowledge) = get_knowledge_mut(state, troublemaker) {
+                    knowledge.true_claim = true_claim;
+                    knowledge.troublemaker_swap = Some((first_choice, second_choice));
+                }
+            }
+        }
+
+        state.turn = state.turn.next();
+    };
+}
+
 fn is_player_minion(state: &State) -> bool {
     state.initial_player == Minion
 }
@@ -921,13 +1015,10 @@ fn robber_action(_: &State, _: Participant, p: Participant, r: Role) -> Claim {
     RobberAction(p, r)
 }
 fn doppel_robber_action(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
-
-
     let participant = robber_doppel_target_or_player(get_role(state, participant)
                                                          .unwrap_or(Villager));
     DoppelRobberAction(participant, p, r)
 }
-
 
 fn robber_doppel_target_or_player(role: Role) -> Participant {
     match role {
