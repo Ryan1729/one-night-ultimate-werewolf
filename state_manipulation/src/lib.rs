@@ -261,7 +261,7 @@ pub fn game_update_and_render(platform: &Platform,
         Werewolves => {
             let werewolves = get_werewolves(state);
 
-            let ready = if state.player == Werewolf {
+            let ready = if is_werewolf(state.player) {
                 (platform.print_xy)(10, 10, "Werewolves, wake up and look for other werewolves.");
 
                 list_werewolves(platform, &werewolves);
@@ -320,7 +320,7 @@ your thumb so the Minion can see who you are.");
         MasonTurn => {
             let masons = get_masons(state);
 
-            let ready = if state.player == Mason {
+            let ready = if is_mason(state.player) {
                 (platform.print_xy)(10, 10, "Masons, wake up and look for other Masons.");
 
                 for i in 0..masons.len() {
@@ -347,7 +347,11 @@ your thumb so the Minion can see who you are.");
 
                     let len = other_masons.len();
 
-                    let claim = MasonAction(other_masons.pop());
+                    let claim = if let Some(DoppelMason(p)) = get_role(state, mason) {
+                        DoppelMasonAction(p, other_masons.pop())
+                    } else {
+                        MasonAction(other_masons.pop())
+                    };
 
                     match mason {
                         Player => {
@@ -1726,10 +1730,15 @@ fn count_votes(votes: &Vec<Participant>) -> Vec<Participant> {
 
 fn is_werewolf(role: Role) -> bool {
     match role {
-        Werewolf
-        // | DoppelWerewolf(_)
-        => true,
-        _ => false
+        Werewolf |
+        DoppelWerewolf(_) => true,
+        _ => false,
+    }
+}
+fn is_mason(role: Role) -> bool {
+    match role {
+        Mason | DoppelMason(_) => true,
+        _ => false,
     }
 }
 fn is_minion(role: Role) -> bool {
@@ -2001,12 +2010,12 @@ fn get_vote(participant: Participant,
 fn get_werewolves(state: &State) -> Vec<Participant> {
     let mut result = Vec::new();
 
-    if state.player == Werewolf {
+    if is_werewolf(state.player) {
         result.push(Player);
     }
 
     for i in 0..state.cpu_roles.len() {
-        if state.cpu_roles[i] == Werewolf {
+        if is_werewolf(state.cpu_roles[i]) {
             result.push(Cpu(i));
         }
     }
@@ -2017,12 +2026,12 @@ fn get_werewolves(state: &State) -> Vec<Participant> {
 fn get_masons(state: &State) -> Vec<Participant> {
     let mut result = Vec::new();
 
-    if state.player == Mason {
+    if is_mason(state.player) {
         result.push(Player);
     }
 
     for i in 0..state.cpu_roles.len() {
-        if state.cpu_roles[i] == Mason {
+        if is_mason(state.cpu_roles[i]) {
             result.push(Cpu(i));
         }
     }

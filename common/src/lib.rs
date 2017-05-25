@@ -69,10 +69,10 @@ pub enum Role {
     Villager,
     Tanner,
     Hunter,
-    // DoppelWerewolf(Participant),
+    DoppelWerewolf(Participant),
     // DoppelMinion(Participant),
     // DoppelRobber(Participant),
-    // DoppelMason(Participant),
+    DoppelMason(Participant),
     DoppelSeer(Participant),
     // DoppelTroublemaker(Participant),
     // DoppelDrunk(Participant),
@@ -85,10 +85,10 @@ use Role::*;
 
 pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
     match role {
-        // Werewolf => DoppelWerewolf(participant),
+        Werewolf => DoppelWerewolf(participant),
         // Minion => DoppelMinion(participant),
         // Robber => DoppelRobber(participant),
-        // Mason => DoppelMason(participant),
+        Mason => DoppelMason(participant),
         Seer => DoppelSeer(participant),
         // Troublemaker => DoppelTroublemaker(participant),
         // Drunk => DoppelDrunk(participant),
@@ -96,10 +96,10 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         Villager => DoppelVillager(participant),
         Tanner => DoppelTanner(participant),
         Hunter => DoppelHunter(participant),
-        // DoppelWerewolf(_) => DoppelWerewolf(participant),
+        DoppelWerewolf(_) => DoppelWerewolf(participant),
         // DoppelMinion(_) => DoppelMinion(participant),
         // DoppelRobber(_) => DoppelRobber(participant),
-        // DoppelMason(_) => DoppelMason(participant),
+        DoppelMason(_) => DoppelMason(participant),
         DoppelSeer(_) => DoppelSeer(participant),
         // DoppelTroublemaker(_) => DoppelTroublemaker(participant),
         // DoppelDrunk(_) => DoppelDrunk(participant),
@@ -130,9 +130,9 @@ impl fmt::Display for Role {
                    Tanner => "a Tanner",
                    Hunter => "a Hunter",
                    //We'll assume don'y know what the doppelganger copied in the general case
-                   //    DoppelWerewolf(_) |
+                      DoppelWerewolf(_) |
                    //    DoppelMinion(_) |
-                   //    DoppelMason(_) |
+                      DoppelMason(_) |
                    //    DoppelRobber(_) |
                       DoppelSeer(_) |
                    //    DoppelTroublemaker(_) |
@@ -313,6 +313,8 @@ pub struct Knowledge {
     pub known_villagers: HashSet<Participant>,
     pub role: Role,
     pub true_claim: Claim,
+    //TODO is this needed/used?
+    //Is it filled maximumlly?
     pub known_non_active: HashSet<Role>,
     //TODO should this line be here?
     //pub known_doppel: Option<Participant>,
