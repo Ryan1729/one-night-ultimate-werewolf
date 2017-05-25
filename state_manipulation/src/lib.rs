@@ -272,6 +272,15 @@ pub fn game_update_and_render(platform: &Platform,
         DoppelRobberReveal => {
             reveal_player(state, platform, left_mouse_pressed, left_mouse_released);
         }
+        DoppelMinionTurn => {
+            minion_turn(state,
+                        platform,
+                        left_mouse_pressed,
+                        left_mouse_released,
+                        is_player_doppel_minion,
+                        get_doppel_minion_index,
+                        "DoppelMinion");
+        }
         Werewolves => {
             let werewolves = get_werewolves(state);
 
@@ -304,32 +313,13 @@ pub fn game_update_and_render(platform: &Platform,
 
         }
         MinionTurn => {
-            let werewolves = get_werewolves(state);
-
-            if state.initial_player == Minion {
-                (platform.print_xy)(10,
-                                    10,
-                                    "Minion, wake up. Werewolves, stick out
-your thumb so the Minion can see who you are.");
-
-                list_werewolves(platform, &werewolves);
-
-                if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
-                    state.turn = state.turn.next();
-                }
-            } else {
-                if let Some(minion_index) = linear_search(&state.initial_cpu_roles, &Minion) {
-                    let minion = Cpu(minion_index);
-
-                    if let Some(knowledge) = get_knowledge_mut(state, minion) {
-                        knowledge.known_werewolves.extend(werewolves.iter());
-                        knowledge.known_minion = Some(minion);
-                        knowledge.true_claim = Simple(Minion);
-                    }
-                }
-
-                state.turn = state.turn.next();
-            }
+            minion_turn(state,
+                        platform,
+                        left_mouse_pressed,
+                        left_mouse_released,
+                        is_player_minion,
+                        get_minion_index,
+                        "Minion");
         }
         MasonTurn => {
             let masons = get_masons(state);
@@ -871,7 +861,63 @@ and exchange your card with a card from the center.");
     false
 }
 
-fn robber_action(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
+fn is_player_minion(state: &State) -> bool {
+    state.initial_player == Minion
+}
+
+fn is_player_doppel_minion(state: &State) -> bool {
+    match state.player {
+        DoppelMinion(_) => true,
+        _ => false,
+    }
+}
+
+fn get_minion_index(state: &State) -> Option<usize> {
+    linear_search(&state.initial_cpu_roles, &Minion)
+}
+fn get_doppel_minion_index(state: &State) -> Option<usize> {
+    linear_search_by(&state.cpu_roles, |r| match r {
+        &DoppelMinion(_) => true,
+        _ => false,
+    })
+}
+fn minion_turn(state: &mut State,
+               platform: &Platform,
+               left_mouse_pressed: bool,
+               left_mouse_released: bool,
+               player_pred: fn(&State) -> bool,
+               get_cpu_index: fn(&State) -> Option<usize>,
+               name: &str) {
+    let werewolves = get_werewolves(state);
+
+    if player_pred(state) {
+        (platform.print_xy)(10,
+                            10,
+                            &format!("{}, wake up. Werewolves, stick out
+your thumb so the Minion can see who you are.",
+                                     name));
+
+        list_werewolves(platform, &werewolves);
+
+        if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
+            state.turn = state.turn.next();
+        }
+    } else {
+        if let Some(minion_index) = get_cpu_index(state) {
+            let minion = Cpu(minion_index);
+
+            if let Some(knowledge) = get_knowledge_mut(state, minion) {
+                knowledge.known_werewolves.extend(werewolves.iter());
+                knowledge.known_minion = Some(minion);
+                knowledge.true_claim = Simple(Minion);
+            }
+        }
+
+        state.turn = state.turn.next();
+    }
+}
+
+fn robber_action(_: &State, _: Participant, p: Participant, r: Role) -> Claim {
     RobberAction(p, r)
 }
 fn doppel_robber_action(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {

@@ -70,7 +70,7 @@ pub enum Role {
     Tanner,
     Hunter,
     DoppelWerewolf(Participant),
-    // DoppelMinion(Participant),
+    DoppelMinion(Participant),
     DoppelRobber(Participant),
     DoppelMason(Participant),
     DoppelSeer(Participant),
@@ -86,7 +86,7 @@ use Role::*;
 pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
     match role {
         Werewolf => DoppelWerewolf(participant),
-        // Minion => DoppelMinion(participant),
+        Minion => DoppelMinion(participant),
         Robber => DoppelRobber(participant),
         Mason => DoppelMason(participant),
         Seer => DoppelSeer(participant),
@@ -97,7 +97,7 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         Tanner => DoppelTanner(participant),
         Hunter => DoppelHunter(participant),
         DoppelWerewolf(_) => DoppelWerewolf(participant),
-        // DoppelMinion(_) => DoppelMinion(participant),
+        DoppelMinion(_) => DoppelMinion(participant),
         DoppelRobber(_) => DoppelRobber(participant),
         DoppelMason(_) => DoppelMason(participant),
         DoppelSeer(_) => DoppelSeer(participant),
@@ -129,9 +129,9 @@ impl fmt::Display for Role {
                    Villager => "a Villager",
                    Tanner => "a Tanner",
                    Hunter => "a Hunter",
-                   //We'll assume don'y know what the doppelganger copied in the general case
+                   //We'll assume don't know what the doppelganger copied in the general case
                       DoppelWerewolf(_) |
-                   //    DoppelMinion(_) |
+                      DoppelMinion(_) |
                       DoppelMason(_) |
                       DoppelRobber(_) |
                       DoppelSeer(_) |
@@ -154,6 +154,7 @@ pub enum Turn {
     DoppelSeerRevealTwo(CenterPair),
     DoppelRobberTurn,
     DoppelRobberReveal,
+    DoppelMinionTurn,
     Werewolves,
     MinionTurn,
     MasonTurn,
@@ -182,8 +183,9 @@ impl Turn {
             DoppelSeerTurn => DoppelRobberTurn,
             DoppelSeerRevealOne(_) => DoppelSeerTurn.next(),
             DoppelSeerRevealTwo(_) => DoppelSeerTurn.next(),
-            DoppelRobberTurn => Werewolves,
+            DoppelRobberTurn => DoppelMinionTurn,
             DoppelRobberReveal => DoppelRobberTurn.next(),
+            DoppelMinionTurn => Werewolves,
             Werewolves => MinionTurn,
             MinionTurn => MasonTurn,
             MasonTurn => SeerTurn,
