@@ -114,19 +114,52 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
+               "{}{:o}",
+               match *self {
+                   Insomniac => "an ",
+                   Werewolf |
+                   Minion |
+                   Mason |
+                   Robber |
+                   Seer |
+                   Troublemaker |
+                   Drunk |
+                   Villager |
+                   Tanner |
+                   Hunter |
+                   DoppelWerewolf(_) |
+                   DoppelMinion(_) |
+                   DoppelMason(_) |
+                   DoppelRobber(_) |
+                   DoppelSeer(_) |
+                   DoppelTroublemaker(_) |
+                   DoppelDrunk(_) |
+                   DoppelInsomniac(_) |
+                   DoppelVillager(_) |
+                   DoppelTanner(_) |
+                   DoppelHunter(_) => "a ",
+               },
+               *self)
+    }
+}
+
+//here we're abusigng the Octal trait since (currently) we can't make a custom display attribute
+impl fmt::Octal for Role {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
                "{}",
                match *self {
-                   Werewolf => "a Werewolf",
-                   Minion => "a Minion",
-                   Mason => "a Mason",
-                   Robber => "a Robber",
-                   Seer => "a Seer",
-                   Troublemaker => "a Troublemaker",
-                   Drunk => "a Drunk",
-                   Insomniac => "an Insomniac",
-                   Villager => "a Villager",
-                   Tanner => "a Tanner",
-                   Hunter => "a Hunter",
+                   Werewolf => "Werewolf",
+                   Minion => "Minion",
+                   Mason => "Mason",
+                   Robber => "Robber",
+                   Seer => "Seer",
+                   Troublemaker => "Troublemaker",
+                   Drunk => "Drunk",
+                   Insomniac => "Insomniac",
+                   Villager => "Villager",
+                   Tanner => "Tanner",
+                   Hunter => "Hunter",
                    //We'll assume don't know what the doppelganger copied in the general case
                    DoppelWerewolf(_) |
                    DoppelMinion(_) |
@@ -138,26 +171,116 @@ impl fmt::Display for Role {
                    DoppelInsomniac(_) |
                    DoppelVillager(_) |
                    DoppelTanner(_) |
-                   DoppelHunter(_) => "a Doppelganger",
+                   DoppelHunter(_) => "Doppelganger",
                })
     }
 }
 
 #[derive(Clone,Copy, PartialEq, Debug)]
-pub enum RoleSpec {
-    TODO,
+pub struct RoleSpec {
+    pub cpu_player_count: u8,
+    pub villager1: bool,
+    pub villager2: bool,
+    pub villager3: bool,
+    pub werewolf1: bool,
+    pub werewolf2: bool,
+    pub seer: bool,
+    pub robber: bool,
+    pub troublemaker: bool,
+    pub tanner: bool,
+    pub drunk: bool,
+    pub hunter: bool,
+    pub masons: bool,
+    pub insomniac: bool,
+    pub minion: bool,
+    pub doppelganger: bool,
 }
-use RoleSpec::*;
+
+macro_rules! add_role{
+    ($result:expr, $flag:expr, $role:expr) => {
+        if $flag {
+            $result.push($role);
+        }
+    }
+}
 
 impl RoleSpec {
     pub fn get_role_vector(&self) -> Vec<Role> {
-        vec![Werewolf, Minion, DoppelVillager(Player), Troublemaker, Werewolf, Seer]
+        //1 for the player and 3 for the center
+        let cards_needed = self.cpu_player_count as usize + 4;
+        let mut result = Vec::new();
+
+        add_role!(result, self.villager1, Villager);
+        add_role!(result, self.villager2, Villager);
+        add_role!(result, self.villager3, Villager);
+        add_role!(result, self.werewolf1, Werewolf);
+        add_role!(result, self.werewolf2, Werewolf);
+        add_role!(result, self.seer, Seer);
+        add_role!(result, self.robber, Robber);
+        add_role!(result, self.troublemaker, Troublemaker);
+        add_role!(result, self.tanner, Tanner);
+        add_role!(result, self.drunk, Drunk);
+        add_role!(result, self.hunter, Hunter);
+        //only either 0 or 2 masoins
+        add_role!(result, self.masons, Mason);
+        add_role!(result, self.masons, Mason);
+        add_role!(result, self.insomniac, Insomniac);
+        add_role!(result, self.minion, Minion);
+        //DoppelVillager(Player) represents the Doppelganger card
+        add_role!(result, self.doppelganger, DoppelVillager(Player));
+
+        while result.len() < cards_needed {
+            result.insert(0, Villager);
+        }
+
+        result
+    }
+}
+
+impl Default for RoleSpec {
+    fn default() -> RoleSpec {
+        RoleSpec {
+            cpu_player_count: 3,
+            werewolf1: true,
+            werewolf2: true,
+            villager1: true,
+            villager2: true,
+            villager3: false,
+            seer: true,
+            robber: true,
+            troublemaker: true,
+            tanner: false,
+            drunk: false,
+            hunter: false,
+            masons: false,
+            insomniac: false,
+            minion: false,
+            doppelganger: false,
+        }
     }
 }
 
 impl Rand for RoleSpec {
     fn rand<R: Rng>(rng: &mut R) -> Self {
-        TODO
+        //BUG: this doesn't select enough role cards for higher player counts.
+        RoleSpec {
+            cpu_player_count: rng.gen_range(2, 11),
+            werewolf1: true,
+            werewolf2: rng.gen::<bool>(),
+            villager1: rng.gen::<bool>(),
+            villager2: rng.gen::<bool>(),
+            villager3: rng.gen::<bool>(),
+            seer: rng.gen::<bool>(),
+            robber: rng.gen::<bool>(),
+            troublemaker: rng.gen::<bool>(),
+            tanner: rng.gen::<bool>(),
+            drunk: rng.gen::<bool>(),
+            hunter: rng.gen::<bool>(),
+            masons: rng.gen::<bool>(),
+            insomniac: rng.gen::<bool>(),
+            minion: rng.gen::<bool>(),
+            doppelganger: rng.gen::<bool>(),
+        }
     }
 }
 
@@ -225,7 +348,7 @@ impl Turn {
             BeginDiscussion => Discuss,
             Discuss => Vote,
             Vote => Resolution,
-            Resolution => Ready(TODO),
+            Resolution => Ready(Default::default()),
         }
     }
 }

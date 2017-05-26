@@ -147,6 +147,8 @@ pub fn update_and_render(platform: &Platform, state: &mut State, events: &mut Ve
     }
 }
 
+
+
 pub fn game_update_and_render(platform: &Platform,
                               state: &mut State,
                               events: &mut Vec<Event>)
@@ -191,9 +193,11 @@ pub fn game_update_and_render(platform: &Platform,
     let t = state.turn;
     match state.turn {
         Ready(mut role_spec) => {
-            (platform.print_xy)(10, 12, "Ready to start a game?");
+            (platform.print_xy)(10, 8, "Ready to start a game?");
 
             //TODO pick roles and number of players
+
+            display_role_spec(platform, 10, 10, &role_spec);
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 let (player,
@@ -803,6 +807,81 @@ pub fn game_update_and_render(platform: &Platform,
     draw(platform, state);
 
     false
+}
+
+fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) {
+    (platform.print_xy)(x,
+                        y,
+                        &format!("Cpu Players: {}", role_spec.cpu_player_count));
+
+    let role_vec = role_spec.get_role_vector();
+
+    //Here's the Run Length Encoder (RLE), in case you're grepping for it.
+    let pairs = role_vec.iter().fold(Vec::new(), |mut acc, &role| {
+        if let Some(RoleCount(last_role, count)) = acc.pop() {
+            if last_role == role {
+                acc.push(RoleCount(last_role, count + 1));
+            } else {
+                acc.push(RoleCount(last_role, count + 1));
+                acc.push(RoleCount(role, 1));
+            }
+        } else {
+            acc.push(RoleCount(role, 1));
+        }
+
+        acc
+    });
+    let mut current_y = y + 1;
+    let mut line = String::new();
+    let mut counter = 0;
+    let len = pairs.len();
+    for i in 0..len - 1 {
+        if i == len - 2 {
+            if counter >= 2 {
+                //Special case:
+                //don't let the last line have MAX_ROLE_COUNTS_PER_LINE + 1 roles counts
+                line.push_str(&format!("{}", pairs[i]));
+                (platform.print_xy)(x, current_y, &line);
+                current_y += 1;
+                line.clear();
+
+                line.push_str(&format!("and {}", pairs[i + 1]));
+                (platform.print_xy)(x, current_y, &line);
+
+                break;
+            } else {
+                line.push_str(&format!("{} and {}", pairs[i], pairs[i + 1]));
+                counter = 3;
+            }
+
+        } else {
+            line.push_str(&format!("{}, ", pairs[i]));
+            counter += 1;
+        }
+
+        if counter >= MAX_ROLE_COUNTS_PER_LINE {
+            (platform.print_xy)(x, current_y, &line);
+            current_y += 1;
+            counter = 0;
+
+            line.clear();
+        }
+    }
+}
+
+const MAX_ROLE_COUNTS_PER_LINE: usize = 3;
+
+struct RoleCount(Role, u32);
+
+impl std::fmt::Display for RoleCount {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+
+        write!(f,
+               "{} {:o} {}",
+               self.1,
+               self.0,
+               if self.1 == 1 { "card" } else { "cards" })
+    }
 }
 
 fn is_player_insomniac(state: &State) -> bool {
