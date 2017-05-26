@@ -58,7 +58,7 @@ impl fmt::Debug for State {
 
 #[derive(Clone,Copy, Debug, PartialEq, Eq,PartialOrd, Ord, Hash)]
 pub enum Role {
-    //TODO before add ing expansions, it should be made much easier to add a role. 
+    //TODO before adding expansions, it should be made much easier to add a role.
     Werewolf,
     Minion,
     Robber,
@@ -108,9 +108,6 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
         DoppelVillager(_) => DoppelVillager(participant),
         DoppelTanner(_) => DoppelTanner(participant),
         DoppelHunter(_) => DoppelHunter(participant),
-        //TODO remove this line once all doppel roles are implemented
-        //so we get erros remininding us to fill this in for expansion roles
-        _ => DoppelVillager(participant),
     }
 }
 
@@ -147,8 +144,26 @@ impl fmt::Display for Role {
 }
 
 #[derive(Clone,Copy, PartialEq, Debug)]
+pub enum RoleSpec {
+    TODO,
+}
+use RoleSpec::*;
+
+impl RoleSpec {
+    pub fn get_role_vector(&self) -> Vec<Role> {
+        vec![Werewolf, Minion, DoppelVillager(Player), Troublemaker, Werewolf, Seer]
+    }
+}
+
+impl Rand for RoleSpec {
+    fn rand<R: Rng>(rng: &mut R) -> Self {
+        TODO
+    }
+}
+
+#[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Turn {
-    Ready,
+    Ready(RoleSpec),
     SeeRole(bool),
     DoppelSeerTurn,
     DoppelSeerRevealOne(Participant),
@@ -183,7 +198,7 @@ impl Turn {
     pub fn next(&self) -> Turn {
         match *self {
             //we only need the (*)Reveal states when the player is the (*)
-            Ready => SeeRole(false),
+            Ready(_) => SeeRole(false),
             SeeRole(_) => DoppelSeerTurn,
             DoppelSeerTurn => DoppelRobberTurn,
             DoppelSeerRevealOne(_) => DoppelSeerTurn.next(),
@@ -210,12 +225,10 @@ impl Turn {
             BeginDiscussion => Discuss,
             Discuss => Vote,
             Vote => Resolution,
-            Resolution => Ready,
+            Resolution => Ready(TODO),
         }
     }
 }
-
-
 
 pub trait AllValues {
     fn all_values() -> Vec<Self> where Self: std::marker::Sized;

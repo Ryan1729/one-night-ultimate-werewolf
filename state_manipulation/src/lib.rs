@@ -45,9 +45,11 @@ pub fn new_state(size: Size) -> State {
 
 fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
     let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge, _) =
-        get_roles_and_knowledge(&mut rng);
+        get_roles_and_knowledge(None, &mut rng);
 
     let initial_cpu_roles = cpu_roles.to_owned();
+
+    let role_spec = rng.gen::<RoleSpec>();
 
     State {
         rng: rng,
@@ -57,7 +59,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         cpu_roles,
         initial_cpu_roles,
         table_roles,
-        turn: Ready,
+        turn: Ready(role_spec),
         player_knowledge,
         cpu_knowledge,
         votes: Vec::new(),
@@ -66,10 +68,15 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
     }
 }
 
-fn get_roles_and_knowledge(rng: &mut StdRng)
+fn get_roles_and_knowledge(possible_role_spec: Option<RoleSpec>,
+                           rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>, bool) {
-    //DoppelVillager(Player) represents the Doppelganger card
-    let mut roles = vec![Werewolf, Minion, DoppelVillager(Player), Troublemaker, Werewolf, Seer];
+    let mut roles = if let Some(role_spec) = possible_role_spec {
+        role_spec.get_role_vector()
+    } else {
+        //DoppelVillager(Player) represents the Doppelganger card
+        vec![Werewolf, Minion, DoppelVillager(Player), Troublemaker, Werewolf, Seer]
+    };
 
     rng.shuffle(&mut roles);
 
@@ -183,7 +190,7 @@ pub fn game_update_and_render(platform: &Platform,
     }
     let t = state.turn;
     match state.turn {
-        Ready => {
+        Ready(mut role_spec) => {
             (platform.print_xy)(10, 12, "Ready to start a game?");
 
             //TODO pick roles and number of players
@@ -194,7 +201,7 @@ pub fn game_update_and_render(platform: &Platform,
                      table_roles,
                      player_knowledge,
                      cpu_knowledge,
-                     player_is_doppel) = get_roles_and_knowledge(&mut state.rng);
+                     player_is_doppel) = get_roles_and_knowledge(Some(role_spec), &mut state.rng);
 
                 state.player = player;
                 state.initial_player = player;
@@ -205,6 +212,8 @@ pub fn game_update_and_render(platform: &Platform,
                 state.cpu_knowledge = cpu_knowledge;
 
                 state.turn = SeeRole(player_is_doppel);
+            } else {
+                state.turn = Ready(role_spec);
             };
         }
         SeeRole(player_is_doppel) => {
