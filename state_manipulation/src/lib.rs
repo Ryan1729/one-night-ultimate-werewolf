@@ -44,12 +44,12 @@ pub fn new_state(size: Size) -> State {
 
 
 fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
+    let role_spec = rng.gen::<RoleSpec>();
+
     let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge, _) =
-        get_roles_and_knowledge(None, &mut rng);
+        get_roles_and_knowledge(Some(role_spec), &mut rng);
 
     let initial_cpu_roles = cpu_roles.to_owned();
-
-    let role_spec = rng.gen::<RoleSpec>();
 
     State {
         rng: rng,
@@ -822,7 +822,7 @@ fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) 
             if last_role == role {
                 acc.push(RoleCount(last_role, count + 1));
             } else {
-                acc.push(RoleCount(last_role, count + 1));
+                acc.push(RoleCount(last_role, count));
                 acc.push(RoleCount(role, 1));
             }
         } else {
@@ -831,6 +831,7 @@ fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) 
 
         acc
     });
+
     let mut current_y = y + 1;
     let mut line = String::new();
     let mut counter = 0;
@@ -871,6 +872,7 @@ fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) 
 
 const MAX_ROLE_COUNTS_PER_LINE: usize = 3;
 
+#[derive(Debug)]
 struct RoleCount(Role, u32);
 
 impl std::fmt::Display for RoleCount {
@@ -1469,7 +1471,7 @@ player’s card or two of the center cards.",
     } else {
         if let Some(seer_index) = linear_search_by(&state.cpu_roles, role_pred) {
             let seer = Cpu(seer_index);
-            println!("{}", seer);
+
 
             let look_at_two = state.rng.gen::<bool>();
 
@@ -2361,7 +2363,6 @@ fn pick_displayable<T: Display + Copy>(platform: &Platform,
     let mut strings: Vec<String> = things.iter().map(|t| t.to_string()).collect();
 
     let width: usize = strings.iter().fold(0, |acc, s| std::cmp::max(acc, s.len()));
-    // println!("{}", width);
     for i in (0..things.len()).rev() {
         let index = i as i32;
 

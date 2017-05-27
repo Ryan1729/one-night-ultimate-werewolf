@@ -84,6 +84,9 @@ pub enum Role {
 }
 use Role::*;
 
+//2 werewolves, 3 villagers, 2 masons and 1 everytthing else
+const ROLE_CARDS_AVAILABLE: u8 = 2 + 3 + 2 + 9;
+
 pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
     match role {
         Werewolf => DoppelWerewolf(participant),
@@ -262,24 +265,53 @@ impl Default for RoleSpec {
 
 impl Rand for RoleSpec {
     fn rand<R: Rng>(rng: &mut R) -> Self {
-        //BUG: this doesn't select enough role cards for higher player counts.
+
+        let cpu_player_count = rng.gen_range(2, 11);
+        // 3 in the center and 1 for the player
+        let mut roles_needed = 3 + 1 + cpu_player_count;
+        let mut deck_size = ROLE_CARDS_AVAILABLE;
+
+        let masons = roles_needed > ROLE_CARDS_AVAILABLE - 2 || rng.gen::<bool>();
+
+        if masons {
+            roles_needed -= 2;
+        }
+        deck_size -= 2;
+
+        //always at least on werewolf
+        let werewolf1 = true;
+        roles_needed -= 1;
+        deck_size -= 1;
+
+        let difference = deck_size - roles_needed;
+
+        let deck_iter = std::iter::repeat(true)
+            .take(roles_needed as usize)
+            .chain(std::iter::repeat(false).take(difference as usize));
+
+        let mut deck: Vec<bool> = deck_iter.collect();
+
+        rng.shuffle(&mut deck);
+
         RoleSpec {
-            cpu_player_count: rng.gen_range(2, 11),
-            werewolf1: true,
-            werewolf2: rng.gen::<bool>(),
-            villager1: rng.gen::<bool>(),
-            villager2: rng.gen::<bool>(),
-            villager3: rng.gen::<bool>(),
-            seer: rng.gen::<bool>(),
-            robber: rng.gen::<bool>(),
-            troublemaker: rng.gen::<bool>(),
-            tanner: rng.gen::<bool>(),
-            drunk: rng.gen::<bool>(),
-            hunter: rng.gen::<bool>(),
-            masons: rng.gen::<bool>(),
-            insomniac: rng.gen::<bool>(),
-            minion: rng.gen::<bool>(),
-            doppelganger: rng.gen::<bool>(),
+            cpu_player_count,
+            werewolf1,
+            werewolf2: deck.pop().unwrap_or(false),
+            seer: deck.pop().unwrap_or(false),
+            robber: deck.pop().unwrap_or(false),
+            troublemaker: deck.pop().unwrap_or(false),
+            tanner: deck.pop().unwrap_or(false),
+            drunk: deck.pop().unwrap_or(false),
+            hunter: deck.pop().unwrap_or(false),
+            masons,
+            insomniac: deck.pop().unwrap_or(false),
+            minion: deck.pop().unwrap_or(false),
+            doppelganger: deck.pop().unwrap_or(false),
+            //not 100% sure but I think handling masons causes the deck to
+            //to run out sometimes. If so, it should run out on villagers.
+            villager1: deck.pop().unwrap_or(false),
+            villager2: deck.pop().unwrap_or(false),
+            villager3: deck.pop().unwrap_or(false),
         }
     }
 }
