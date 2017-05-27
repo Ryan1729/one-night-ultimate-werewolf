@@ -38,6 +38,8 @@ pub struct State {
     pub votes: Vec<(Participant, Participant)>,
     pub claims: HashMap<Participant, Claim>,
     pub ui_context: UIContext,
+    pub role_spec: RoleSpec,
+    pub show_role_spec: bool,
 }
 
 impl fmt::Debug for State {
@@ -318,7 +320,7 @@ impl Rand for RoleSpec {
 
 #[derive(Clone,Copy, PartialEq, Debug)]
 pub enum Turn {
-    Ready(RoleSpec),
+    Ready,
     SeeRole(bool),
     DoppelSeerTurn,
     DoppelSeerRevealOne(Participant),
@@ -353,7 +355,7 @@ impl Turn {
     pub fn next(&self) -> Turn {
         match *self {
             //we only need the (*)Reveal states when the player is the (*)
-            Ready(_) => SeeRole(false),
+            Ready => SeeRole(false),
             SeeRole(_) => DoppelSeerTurn,
             DoppelSeerTurn => DoppelRobberTurn,
             DoppelSeerRevealOne(_) => DoppelSeerTurn.next(),
@@ -380,7 +382,7 @@ impl Turn {
             BeginDiscussion => Discuss,
             Discuss => Vote,
             Vote => Resolution,
-            Resolution => Ready(Default::default()),
+            Resolution => Ready,
         }
     }
 }

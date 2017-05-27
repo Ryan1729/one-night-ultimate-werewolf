@@ -47,7 +47,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
     let role_spec = rng.gen::<RoleSpec>();
 
     let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge, _) =
-        get_roles_and_knowledge(Some(role_spec), &mut rng);
+        get_roles_and_knowledge(&role_spec, &mut rng);
 
     let initial_cpu_roles = cpu_roles.to_owned();
 
@@ -59,24 +59,21 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         cpu_roles,
         initial_cpu_roles,
         table_roles,
-        turn: Ready(role_spec),
+        turn: Ready,
         player_knowledge,
         cpu_knowledge,
         votes: Vec::new(),
         claims: HashMap::new(),
         ui_context: UIContext::new(),
+        role_spec,
+        show_role_spec: false,
     }
 }
 
-fn get_roles_and_knowledge(possible_role_spec: Option<RoleSpec>,
+fn get_roles_and_knowledge(role_spec: &RoleSpec,
                            rng: &mut StdRng)
                            -> (Role, Vec<Role>, [Role; 3], Knowledge, Vec<Knowledge>, bool) {
-    let mut roles = if let Some(role_spec) = possible_role_spec {
-        role_spec.get_role_vector()
-    } else {
-        //DoppelVillager(Player) represents the Doppelganger card
-        vec![Werewolf, Minion, DoppelVillager(Player), Troublemaker, Werewolf, Seer]
-    };
+    let mut roles = role_spec.get_role_vector();
 
     rng.shuffle(&mut roles);
 
@@ -174,7 +171,7 @@ pub fn game_update_and_render(platform: &Platform,
 
     state.ui_context.frame_init();
 
-    let reverse_spec = ButtonSpec {
+    let next_spec = ButtonSpec {
         x: 0,
         y: 0,
         w: 10,
@@ -185,19 +182,64 @@ pub fn game_update_and_render(platform: &Platform,
 
     if do_button(platform,
                  &mut state.ui_context,
-                 &reverse_spec,
+                 &next_spec,
                  left_mouse_pressed,
                  left_mouse_released) {
         state.turn = state.turn.next();
     }
-    let t = state.turn;
+
+    let size = (platform.size)();
+
+    let toggle_role_spec_spec = ButtonSpec {
+        x: 0,
+        y: size.height - 4,
+        w: 24,
+        h: 3,
+        text: if state.show_role_spec {
+            "Back to game".to_string()
+        } else {
+            "Show Available Roles".to_string()
+        },
+        id: 3,
+    };
+
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &toggle_role_spec_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) {
+        state.show_role_spec = !state.show_role_spec;
+    }
+
+
+
+    if state.show_role_spec {
+        display_role_spec(platform, 10, 10, &state.role_spec);
+    } else {
+        let t = state.turn;
+        advance_turn_if_needed(state, platform, left_mouse_pressed, left_mouse_released);
+
+        if t != state.turn {
+            println!("{:?}", state.turn);
+        }
+    }
+
+    draw(platform, state);
+
+    false
+}
+
+fn advance_turn_if_needed(state: &mut State,
+                          platform: &Platform,
+                          left_mouse_pressed: bool,
+                          left_mouse_released: bool) {
     match state.turn {
-        Ready(mut role_spec) => {
+        Ready => {
             (platform.print_xy)(10, 8, "Ready to start a game?");
 
             //TODO pick roles and number of players
 
-            display_role_spec(platform, 10, 10, &role_spec);
+            display_role_spec(platform, 10, 10, &state.role_spec);
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 let (player,
@@ -205,7 +247,7 @@ pub fn game_update_and_render(platform: &Platform,
                      table_roles,
                      player_knowledge,
                      cpu_knowledge,
-                     player_is_doppel) = get_roles_and_knowledge(Some(role_spec), &mut state.rng);
+                     player_is_doppel) = get_roles_and_knowledge(&state.role_spec, &mut state.rng);
 
                 state.player = player;
                 state.initial_player = player;
@@ -217,7 +259,7 @@ pub fn game_update_and_render(platform: &Platform,
 
                 state.turn = SeeRole(player_is_doppel);
             } else {
-                state.turn = Ready(role_spec);
+                state.turn = Ready;
             };
         }
         SeeRole(player_is_doppel) => {
@@ -800,13 +842,6 @@ pub fn game_update_and_render(platform: &Platform,
 
     }
 
-    if t != state.turn {
-        println!("{:?}", state.turn);
-    }
-
-    draw(platform, state);
-
-    false
 }
 
 fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) {
@@ -2591,7 +2626,7 @@ fn print_centered_line(platform: &Platform, x: i32, y: i32, w: i32, h: i32, text
     let x_ = {
         let rect_middle = x + (w / 2);
 
-        rect_middle - (text.chars().count() as f32 / 2.0) as i32
+        std::cmp::max(rect_middle - (text.chars().count() as f32 / 2.0) as i32, 0)
     };
 
     let y_ = y + (h / 2);
