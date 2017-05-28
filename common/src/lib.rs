@@ -520,7 +520,7 @@ impl fmt::Display for Participant {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Knowledge {
     pub known_werewolves: HashSet<Participant>,
     pub known_villagers: HashSet<Participant>,

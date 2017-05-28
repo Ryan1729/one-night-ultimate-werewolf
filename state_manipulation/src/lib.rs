@@ -712,6 +712,8 @@ fn advance_turn_if_needed(state: &mut State,
                 }
             };
 
+            targets.sort();
+
             if targets.len() == 0 {
                 (platform.print_xy)(10, 10, "Nobody died.");
 
@@ -827,12 +829,12 @@ fn advance_turn_if_needed(state: &mut State,
                 }
             }
 
-            (platform.print_xy)(10, 20, &format!("You are {}", state.player));
+            (platform.print_xy)(10, 20, &format!("You are {}", full_role_string(state.player)));
 
             for i in 0..state.cpu_roles.len() {
                 (platform.print_xy)(10,
                                     21 + i as i32,
-                                    &format!("{} is {}", Cpu(i), state.cpu_roles[i]));
+                                    &format!("{} is {}", Cpu(i), full_role_string(state.cpu_roles[i])));
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -1728,12 +1730,20 @@ fn get_knowledge_mut(state: &mut State, participant: Participant) -> Option<&mut
         Cpu(index) => state.cpu_knowledge.get_mut(index),
     }
 }
+fn get_knowledge_copy(state: &State, participant: Participant) -> Option<Knowledge> {
+    get_knowledge(state, participant).map(|k| k.clone())
+}
+
+
 fn make_cpu_claim(state: &mut State, participant: Participant) {
     if participant == Player {
         return;
     }
 
-    let possible_claim = if let Some(knowledge) = get_knowledge(state, participant) {
+    //the copy is needed so we can get random numbers below
+    let possible_knowledge = get_knowledge_copy(state, participant);
+
+    let possible_claim = if let Some(knowledge) = possible_knowledge {
         let claim = if is_werewolf(knowledge.role) {
             //TODO better lying
             //equal probability of all plausible possibilities?
@@ -1747,8 +1757,20 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
                 Simple(Villager)
             }
         } else if is_tanner(knowledge.role) {
-            //TODO try to get self voted for more convincingly
-            Simple(Werewolf)
+            //TODO more different ways to lie
+
+            let other_participants = get_other_participants(state, participant);
+
+            let role_vec: Vec<Role> = state.role_spec.get_role_vector();
+
+            let rng = &mut state.rng;
+            if let Some(claim) = get_fake_robber_claim(&other_participants, &role_vec, rng) {
+                claim
+            } else if let Some(claim) = get_fake_insomniac_claim(&role_vec, rng) {
+                claim
+            } else {
+                Simple(Werewolf)
+            }
         } else {
             //TODO occasionally lying while a villager to try and snuff out werewolves
             knowledge.true_claim
@@ -1761,6 +1783,54 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
 
     if let Some(claim) = possible_claim {
         insert_claim(state, participant, claim);
+    }
+}
+
+fn get_fake_robber_claim<R: Rng>(other_participants: &Vec<Participant>,
+                                 role_vec: &Vec<Role>,
+                                 rng: &mut R)
+                                 -> Option<Claim> {
+    if !role_vec.contains(&Robber) {
+        return None;
+    }
+
+    let filtered = role_vec.iter()
+        .filter(|&&r| is_on_village_team(r) && !is_mason(r) && r != Robber)
+        .map(|&r| r)
+        .collect();
+
+    if let (Some(&target), Some(&claimed_role)) =
+        (get_random(&other_participants, rng), get_random(&filtered, rng)) {
+        Some(RobberAction(target, claimed_role))
+    } else {
+        None
+    }
+}
+
+fn get_fake_insomniac_claim<R: Rng>(role_vec: &Vec<Role>, rng: &mut R) -> Option<Claim> {
+    if !role_vec.contains(&Insomniac) {
+        return None;
+    }
+
+    let filtered = role_vec.iter()
+        .filter(|&&r| is_on_village_team(r) && !is_mason(r))
+        .map(|&r| r)
+        .collect();
+
+    if let Some(&claimed_role) = get_random(&filtered, rng) {
+        Some(InsomniacAction(claimed_role))
+    } else {
+        None
+    }
+}
+
+fn get_random<'a, T, R: Rng>(things: &'a Vec<T>, rng: &mut R) -> Option<&'a T> {
+    let len = things.len();
+
+    if len > 0 {
+        things.get(rng.gen_range(0, len)).map(|t| t)
+    } else {
+        None
     }
 }
 
@@ -2112,9 +2182,7 @@ fn is_mason(role: Role) -> bool {
 }
 fn is_minion(role: Role) -> bool {
     match role {
-        Minion
-        // | DoppelMinion(_)
-        => true,
+        Minion | DoppelMinion(_) => true,
         _ => false,
     }
 }
@@ -2124,6 +2192,10 @@ fn is_tanner(role: Role) -> bool {
         _ => false,
     }
 }
+fn is_on_village_team(role: Role) -> bool {
+    !(is_werewolf(role) || is_minion(role) || is_tanner(role))
+}
+
 
 fn swap_roles(state: &mut State, p1: Participant, p2: Participant) {
     unsafe {
