@@ -2381,15 +2381,16 @@ fn pick_displayable<T: Display + Copy>(platform: &Platform,
 
     let mut strings: Vec<String> = things.iter().map(|t| t.to_string()).collect();
 
-    let width: usize = strings.iter().fold(0, |acc, s| std::cmp::max(acc, s.len()));
+    //3 spaces on either side
+    let width: i32 = 6 + strings.iter().fold(0, |acc, s| std::cmp::max(acc, s.len())) as i32;
     for i in (0..things.len()).rev() {
         let index = i as i32;
 
         if let Some(string) = strings.pop() {
             let spec = ButtonSpec {
-                x: (size.width / 2) - 6,
+                x: size.width - width,
                 y: (index + 1) * 4,
-                w: (width as i32) + 6,
+                w: width,
                 h: 3,
                 text: string,
                 id: 12 + index,
