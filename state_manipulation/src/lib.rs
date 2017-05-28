@@ -1747,30 +1747,17 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
         let claim = if is_werewolf(knowledge.role) {
             //TODO better lying
             //equal probability of all plausible possibilities?
-            Simple(Villager)
+            attempt_not_to_be_picked(state, participant)
         } else if is_minion(knowledge.role) {
             if knowledge.known_werewolves.len() > 0 {
-                //TODO look at already made claims and try to cover for Werewolves?
-                Simple(Werewolf)
+                //TODO try to cover for Werewolves and not specifically try to get picked?
+                attempt_to_be_picked(state, participant)
             } else {
                 //TODO try to get another player voted for
                 Simple(Villager)
             }
         } else if is_tanner(knowledge.role) {
-            //TODO more different ways to lie
-
-            let other_participants = get_other_participants(state, participant);
-
-            let role_vec: Vec<Role> = state.role_spec.get_role_vector();
-
-            let rng = &mut state.rng;
-            if let Some(claim) = get_fake_robber_claim(&other_participants, &role_vec, rng) {
-                claim
-            } else if let Some(claim) = get_fake_insomniac_claim(&role_vec, rng) {
-                claim
-            } else {
-                Simple(Werewolf)
-            }
+            attempt_to_be_picked(state, participant)
         } else {
             //TODO occasionally lying while a villager to try and snuff out werewolves
             knowledge.true_claim
@@ -1784,6 +1771,29 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
     if let Some(claim) = possible_claim {
         insert_claim(state, participant, claim);
     }
+}
+
+fn plausable_lie(state:&mut State, participant: Participant) -> Option<Claim> {
+    let other_participants = get_other_participants(state, participant);
+
+    let role_vec: Vec<Role> = state.role_spec.get_role_vector();
+
+    let rng = &mut state.rng;
+    //TODO more types of lies
+    get_fake_robber_claim(&other_participants, &role_vec, rng).or_else(|| {
+        get_fake_insomniac_claim(&role_vec, rng)
+    })
+}
+
+//TODO should this and attempt_not_to_be_picked be so similar?
+//maybe attempt_to_be_picked should look at prior claims and try to create confusion
+//and the other one should try to reduce it?
+fn attempt_to_be_picked(state:&mut State, participant: Participant) -> Claim {
+    plausable_lie(state, participant).unwrap_or(Simple(Werewolf))
+}
+
+fn attempt_not_to_be_picked(state:&mut State, participant: Participant) -> Claim {
+    plausable_lie(state, participant).unwrap_or(Simple(Villager))
 }
 
 fn get_fake_robber_claim<R: Rng>(other_participants: &Vec<Participant>,
@@ -1812,16 +1822,31 @@ fn get_fake_insomniac_claim<R: Rng>(role_vec: &Vec<Role>, rng: &mut R) -> Option
         return None;
     }
 
-    let filtered = role_vec.iter()
+    if role_vec.contains(&Troublemaker) {
+    let filtered = if role_vec.contains(&Robber) {
+         role_vec.iter()
         .filter(|&&r| is_on_village_team(r) && !is_mason(r))
         .map(|&r| r)
-        .collect();
+        .collect()
+     } else {
+         role_vec.iter()
+        .filter(|&&r| is_on_village_team(r) && !is_mason(r) && r != Troublemaker)
+        .map(|&r| r)
+        .collect()
+
+    };
 
     if let Some(&claimed_role) = get_random(&filtered, rng) {
         Some(InsomniacAction(claimed_role))
     } else {
+        //TODO cnfirm that expansions make a none case (and thus the return type) necessary
         None
     }
+} else if role_vec.contains(&Robber) {
+    Some(InsomniacAction(Robber))
+} else {
+    Some(InsomniacAction(Insomniac))
+}
 }
 
 fn get_random<'a, T, R: Rng>(things: &'a Vec<T>, rng: &mut R) -> Option<&'a T> {
