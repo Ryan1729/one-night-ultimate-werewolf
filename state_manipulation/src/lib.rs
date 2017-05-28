@@ -595,14 +595,12 @@ fn advance_turn_if_needed(state: &mut State,
 
             let claims = get_claim_vec(state);
 
-            for i in 0..claims.len() {
+            let lines = claims_to_lines(state, claims);
+
+            for i in 0..lines.len() {
                 let index = i as i32;
 
-                display_claim(state,
-                              platform,
-                              10,
-                              6 + (index * MAX_CLAIM_HEIGHT),
-                              &claims[i]);
+                (platform.print_xy)(10, 4 + (index), &lines[i]);
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -1813,15 +1811,26 @@ fn get_claim_vec(state: &State) -> Vec<(Participant, Claim)> {
 
     result
 }
-fn display_claim(state: &State,
-                 platform: &Platform,
-                 x: i32,
-                 y: i32,
-                 &(participant, claim): &(Participant, Claim)) {
+
+fn claims_to_lines(state: &State, claims: Vec<(Participant, Claim)>) -> Vec<String> {
+    let mut result = Vec::new();
+
+    for pair in claims.iter() {
+        push_claim_lines(state, &mut result, pair);
+        result.push("".to_string());
+    }
+
+    result
+}
+
+fn push_claim_lines(state: &State,
+                    result: &mut Vec<String>,
+                    &(participant, claim): &(Participant, Claim)) {
+
     if participant == Player {
         match claim {
             Simple(role) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", role));
+                result.push(format!("You claim that you are {}", role));
 
                 if role == Minion {
                     let possible_list = get_knowledge(state, participant).and_then(|k| {
@@ -1830,317 +1839,192 @@ fn display_claim(state: &State,
                         if list.len() > 0 { Some(list) } else { None }
                     });
                     if let Some(list) = possible_list {
-
-                        (platform.print_xy)(x,
-
-                                            y + 1,
-                                            &format!("and you know {} are werewolves.", list));
+                        result.push(format!("and you know {} are werewolves.", list));
                     }
 
                 }
             }
             DoppelSimple(doppel_target, role) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, Simple(role)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, Simple(role)));
             }
             MasonAction(Some(other_mason)) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("You claim that you are {} and so is {}",
-                                             Mason,
-                                             other_mason));
+                result.push(format!("You claim that you are {} and so is {}", Mason, other_mason));
             }
             DoppelMasonAction(doppel_target, Some(other_mason)) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, MasonAction(Some(other_mason))));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state,
+                                 result,
+                                 &(participant, MasonAction(Some(other_mason))));
             }
             MasonAction(None) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("You claim that you are {} but no one else is",
-                                             Mason));
+                result.push(format!("You claim that you are {} but no one else is", Mason));
             }
             DoppelMasonAction(doppel_target, None) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, MasonAction(None)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, MasonAction(None)));
             }
             RobberAction(p, role) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Robber));
-                (platform.print_xy)(x,
-                                    y + 1,
-                                    &format!("and you swapped roles with {} and they were {}",
-                                             p,
-                                             role));
+                result.push(format!("You claim that you are {}", Robber));
+                result.push(format!("and you swapped roles with {} and they were {}", p, role));
             }
             DoppelRobberAction(doppel_target, p, role) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, RobberAction(p, role)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, RobberAction(p, role)));
             }
             SeerRevealOneAction(p, role) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Seer));
-                (platform.print_xy)(x,
-                                    y + 1,
-                                    &format!("and you looked at {} and they were {}", p, role));
+                result.push(format!("You claim that you are {}", Seer));
+                result.push(format!("and you looked at {} and they were {}", p, role));
             }
             DoppelSeerRevealOneAction(doppel_target, p, role) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, SeerRevealOneAction(p, role)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, SeerRevealOneAction(p, role)));
             }
             SeerRevealTwoAction(centerpair, role1, role2) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Seer));
-                let message = &format!("and you looked at the {} cards and they were {} and {}",
-                                       centerpair,
-                                       role1,
-                                       role2);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("You claim that you are {}", Seer));
+                let message = format!("and you looked at the {} cards and they were {} and {}",
+                                      centerpair,
+                                      role1,
+                                      role2);
+                result.push(message);
             }
             DoppelSeerRevealTwoAction(doppel_target, centerpair, role1, role2) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, SeerRevealTwoAction(centerpair, role1, role2)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state,
+                                 result,
+                                 &(participant, SeerRevealTwoAction(centerpair, role1, role2)));
             }
             TroublemakerAction(p1, p2) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Troublemaker));
-                let message = &format!("and you swapeed the roles of {} and {}.", p1, p2);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("You claim that you are {}", Troublemaker));
+                let message = format!("and you swapeed the roles of {} and {}.", p1, p2);
+                result.push(message);
             }
             DoppelTroublemakerAction(doppel_target, p1, p2) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, TroublemakerAction(p1, p2)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, TroublemakerAction(p1, p2)));
             }
             InsomniacAction(role) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Insomniac));
-                let message = &format!("and you are now {}.", role);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("You claim that you are {}", Insomniac));
+                let message = format!("and you are now {}.", role);
+                result.push(message);
             }
             DoppelInsomniacAction(doppel_target, role) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, InsomniacAction(role)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, InsomniacAction(role)));
             }
             DrunkAction(card) => {
-                (platform.print_xy)(x, y, &format!("You claim that you are {}", Drunk));
-                let message = &format!("and you swapped with the {} card.", card);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("You claim that you are {}", Drunk));
+                let message = format!("and you swapped with the {} card.", card);
+                result.push(message);
             }
             DoppelDrunkAction(doppel_target, card) => {
-                (platform.print_xy)(x, y, &format!("You claim you copied {}.", doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, DrunkAction(card)));
+                result.push(format!("You claim you copied {}.", doppel_target));
+                push_claim_lines(state, result, &(participant, DrunkAction(card)));
             }
         }
     } else {
         match claim {
             Simple(role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {}", participant, role));
+                result.push(format!("{} claims that they are {}", participant, role));
 
                 if role == Minion {
                     let possible_list = get_known_werevolves_str_list(state, participant);
                     if let Some(list) = possible_list {
-                        (platform.print_xy)(x,
-                                            y + 1,
-                                            &format!("and they know {} are werewolves.", list));
+                        result.push(format!("and they know {} are werewolves.", list));
                     }
                 }
             }
             DoppelSimple(doppel_target, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, Simple(role)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, Simple(role)));
             }
             MasonAction(Some(other_mason)) => {
                 let verb_form = if other_mason == Player { "are" } else { "is" };
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {} and so {} {}",
-                                             participant,
-                                             Mason,
-                                             verb_form,
-                                             other_mason));
+                result.push(format!("{} claims that they are {} and so {} {}",
+                                    participant,
+                                    Mason,
+                                    verb_form,
+                                    other_mason));
             }
             DoppelMasonAction(doppel_target, Some(other_mason)) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, MasonAction(Some(other_mason))));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state,
+                                 result,
+                                 &(participant, MasonAction(Some(other_mason))));
             }
             MasonAction(None) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {} but no one else is",
-                                             participant,
-                                             Mason));
+                result.push(format!("{} claims that they are {} but no one else is",
+                                    participant,
+                                    Mason));
             }
             DoppelMasonAction(doppel_target, None) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, MasonAction(None)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, MasonAction(None)));
             }
             RobberAction(p, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {}", participant, Robber));
+                result.push(format!("{} claims that they are {}", participant, Robber));
                 let pronoun = if p == Player { "You" } else { "they" };
-                (platform.print_xy)(x,
-                                    y + 1,
-                                    &format!("and they swapped roles with {} and {} were {}",
-                                             p,
-                                             pronoun,
-                                             role));
+                result.push(format!("and they swapped roles with {} and {} were {}",
+                                    p,
+                                    pronoun,
+                                    role));
             }
             DoppelRobberAction(doppel_target, p, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, RobberAction(p, role)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, RobberAction(p, role)));
             }
             SeerRevealOneAction(p, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {}", participant, Seer));
+                result.push(format!("{} claims that they are {}", participant, Seer));
                 let pronoun = if p == Player { "You" } else { "they" };
-                (platform.print_xy)(x,
-                                    y + 1,
-                                    &format!("and they looked at {} and {} were {}",
-                                             p,
-                                             pronoun,
-                                             role));
+                result.push(format!("and they looked at {} and {} were {}", p, pronoun, role));
             }
             DoppelSeerRevealOneAction(doppel_target, p, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, SeerRevealOneAction(p, role)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, SeerRevealOneAction(p, role)));
             }
             SeerRevealTwoAction(centerpair, role1, role2) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {}", participant, Seer));
-                let message = &format!("and they looked at the {} cards and they were {} and {}",
-                                       centerpair,
-                                       role1,
-                                       role2);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("{} claims that they are {}", participant, Seer));
+                let message = format!("and they looked at the {} cards and they were {} and {}",
+                                      centerpair,
+                                      role1,
+                                      role2);
+                result.push(message);
             }
             DoppelSeerRevealTwoAction(doppel_target, centerpair, role1, role2) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, SeerRevealTwoAction(centerpair, role1, role2)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state,
+                                 result,
+                                 &(participant, SeerRevealTwoAction(centerpair, role1, role2)));
             }
             TroublemakerAction(p1, p2) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims that they are {}",
-                                             participant,
-                                             Troublemaker));
-                let message = &format!("and they swapeed the roles of the following two players:
-    {} and {}.",
-                                       p1,
-                                       p2);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("{} claims that they are {}", participant, Troublemaker));
+                result.push("and they swapeed the roles of the following two players:".to_string());
+                let message = format!("    {} and {}.", p1, p2);
+                result.push(message);
             }
             DoppelTroublemakerAction(doppel_target, p1, p2) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, TroublemakerAction(p1, p2)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, TroublemakerAction(p1, p2)));
             }
             InsomniacAction(role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claim that they are {}", participant, Insomniac));
-                let message = &format!("and they are now {}.", role);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("{} claim that they are {}", participant, Insomniac));
+                let message = format!("and they are now {}.", role);
+                result.push(message);
             }
             DoppelInsomniacAction(doppel_target, role) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state,
-                              platform,
-                              x,
-                              y + 1,
-                              &(participant, InsomniacAction(role)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, InsomniacAction(role)));
             }
             DrunkAction(card) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claim that they are {}", participant, Drunk));
-                let message = &format!("and they swapped with the {} card.", card);
-                (platform.print_xy)(x, y + 1, message);
+                result.push(format!("{} claim that they are {}", participant, Drunk));
+                let message = format!("and they swapped with the {} card.", card);
+                result.push(message);
             }
             DoppelDrunkAction(doppel_target, card) => {
-                (platform.print_xy)(x,
-                                    y,
-                                    &format!("{} claims they copied {}",
-                                             participant,
-                                             doppel_target));
-                display_claim(state, platform, x, y + 1, &(participant, DrunkAction(card)));
+                result.push(format!("{} claims they copied {}", participant, doppel_target));
+                push_claim_lines(state, result, &(participant, DrunkAction(card)));
             }
         }
-
     }
 }
 

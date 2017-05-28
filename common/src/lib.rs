@@ -268,7 +268,7 @@ impl Default for RoleSpec {
 impl Rand for RoleSpec {
     fn rand<R: Rng>(rng: &mut R) -> Self {
 
-        let cpu_player_count = rng.gen_range(2, 11);
+        let cpu_player_count = rng.gen_range(2, 10);
         // 3 in the center and 1 for the player
         let mut roles_needed = 3 + 1 + cpu_player_count;
         let mut deck_size = ROLE_CARDS_AVAILABLE;

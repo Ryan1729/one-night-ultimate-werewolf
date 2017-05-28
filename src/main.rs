@@ -80,7 +80,7 @@ impl Application {
 }
 
 fn main() {
-    terminal::open("____", 80, 30);
+    terminal::open("____", 80, 44);
     terminal::set(config::Window::empty().resizeable(true));
     terminal::set(vec![config::InputFilter::Group {
                            group: config::InputFilterGroup::Keyboard,
