@@ -280,7 +280,9 @@ fn advance_turn_if_needed(state: &mut State,
                     None => {}
                 }
             } else {
-                (platform.print_xy)(10, 12, &format!("You are {}.", state.player));
+                (platform.print_xy)(10,
+                                    12,
+                                    &format!("You are {}.", full_role_string(state.player)));
 
                 if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                     state.turn = state.turn.next();
@@ -841,6 +843,7 @@ fn advance_turn_if_needed(state: &mut State,
     }
 
 }
+
 
 fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) {
     (platform.print_xy)(x,
@@ -2007,8 +2010,8 @@ fn push_claim_lines(state: &State,
                 push_claim_lines(state, result, &(participant, TroublemakerAction(p1, p2)));
             }
             InsomniacAction(role) => {
-                result.push(format!("{} claim that they are {}", participant, Insomniac));
-                let message = format!("and they are now {}.", role);
+                result.push(format!("{} claims that they were {}", participant, Insomniac));
+                let message = format!("and they are now ... {}.", role);
                 result.push(message);
             }
             DoppelInsomniacAction(doppel_target, role) => {
@@ -2016,7 +2019,7 @@ fn push_claim_lines(state: &State,
                 push_claim_lines(state, result, &(participant, InsomniacAction(role)));
             }
             DrunkAction(card) => {
-                result.push(format!("{} claim that they are {}", participant, Drunk));
+                result.push(format!("{} claims that they are {}", participant, Drunk));
                 let message = format!("and they swapped with the {} card.", card);
                 result.push(message);
             }
@@ -2288,7 +2291,7 @@ fn pick_displayable<T: Display + Copy>(platform: &Platform,
         if let Some(string) = strings.pop() {
             let spec = ButtonSpec {
                 x: (size.width / 2) - 6,
-                y: (index + 2) * 4,
+                y: (index + 1) * 4,
                 w: (width as i32) + 6,
                 h: 3,
                 text: string,

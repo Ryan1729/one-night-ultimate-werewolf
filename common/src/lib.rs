@@ -118,37 +118,12 @@ pub fn get_doppel_role(role: Role, participant: Participant) -> Role {
 
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{}{:o}",
-               match *self {
-                   Insomniac => "an ",
-                   Werewolf |
-                   Minion |
-                   Mason |
-                   Robber |
-                   Seer |
-                   Troublemaker |
-                   Drunk |
-                   Villager |
-                   Tanner |
-                   Hunter |
-                   DoppelWerewolf(_) |
-                   DoppelMinion(_) |
-                   DoppelMason(_) |
-                   DoppelRobber(_) |
-                   DoppelSeer(_) |
-                   DoppelTroublemaker(_) |
-                   DoppelDrunk(_) |
-                   DoppelInsomniac(_) |
-                   DoppelVillager(_) |
-                   DoppelTanner(_) |
-                   DoppelHunter(_) => "a ",
-               },
-               *self)
+        write!(f, "{:b}{:o}", *self, *self)
     }
 }
 
 //here we're abusigng the Octal trait since (currently) we can't make a custom display attribute
+//o for "only the name"?
 impl fmt::Octal for Role {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
@@ -179,6 +154,59 @@ impl fmt::Octal for Role {
                    DoppelHunter(_) => "Doppelganger",
                })
     }
+}
+
+//and the formatting trait abuse continues!
+//b fo "before the name"
+impl fmt::Binary for Role {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+               "{}",
+               match *self {
+                   Insomniac => "an ",
+                   Werewolf |
+                   Minion |
+                   Mason |
+                   Robber |
+                   Seer |
+                   Troublemaker |
+                   Drunk |
+                   Villager |
+                   Tanner |
+                   Hunter |
+                   DoppelWerewolf(_) |
+                   DoppelMinion(_) |
+                   DoppelMason(_) |
+                   DoppelRobber(_) |
+                   DoppelSeer(_) |
+                   DoppelTroublemaker(_) |
+                   DoppelDrunk(_) |
+                   DoppelInsomniac(_) |
+                   DoppelVillager(_) |
+                   DoppelTanner(_) |
+                   DoppelHunter(_) => "a ",
+               })
+    }
+}
+
+pub fn full_role_string(role: Role) -> String {
+    let role_name = match role {
+        DoppelWerewolf(_) => "Doppel-Werewolf".to_string(),
+        DoppelMinion(_) => "Doppel-Minion".to_string(),
+        DoppelMason(_) => "Doppel-Mason".to_string(),
+        DoppelRobber(_) => "Doppel-Robber".to_string(),
+        DoppelSeer(_) => "Doppel-Seer".to_string(),
+        DoppelTroublemaker(_) => "Doppel-Troublemaker".to_string(),
+        DoppelDrunk(_) => "Doppel-Drunk".to_string(),
+        DoppelInsomniac(_) => "Doppel-Insomniac".to_string(),
+        DoppelVillager(_) => "Doppel-Villager".to_string(),
+        DoppelTanner(_) => "Doppel-Tanner".to_string(),
+        DoppelHunter(_) => "Doppel-Hunter".to_string(),
+
+        _ => format!("{:o}", role),
+    };
+
+    format!("{:b}{}", role, role_name)
 }
 
 #[derive(Clone,Copy, PartialEq, Debug)]
