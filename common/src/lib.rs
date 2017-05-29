@@ -576,8 +576,8 @@ impl Knowledge {
 pub enum Claim {
     Simple(Role),
     DoppelSimple(Participant, Role),
-    MasonAction(Option<Participant>),
-    DoppelMasonAction(Participant, Option<Participant>),
+    MasonAction(ZeroToTwo<Participant>),
+    DoppelMasonAction(Participant, ZeroToTwo<Participant>),
     RobberAction(Participant, Role),
     DoppelRobberAction(Participant, Participant, Role),
     SeerRevealOneAction(Participant, Role),
@@ -592,6 +592,13 @@ pub enum Claim {
     DoppelDrunkAction(Participant, CenterCard),
 }
 use Claim::*;
+
+#[derive(PartialEq, Eq,PartialOrd, Ord, Clone,Copy, Debug)]
+pub enum ZeroToTwo<T> {
+    Zero,
+    One(T),
+    Two(T, T),
+}
 
 pub type UiId = i32;
 

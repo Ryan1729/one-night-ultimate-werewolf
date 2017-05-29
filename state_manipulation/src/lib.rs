@@ -8,6 +8,7 @@ use common::Participant::*;
 use common::Claim::*;
 use common::CenterPair::*;
 use common::CenterCard::*;
+use common::ZeroToTwo::*;
 
 use rand::{StdRng, SeedableRng, Rng};
 use std::collections::HashMap;
@@ -439,9 +440,9 @@ fn advance_turn_if_needed(state: &mut State,
                     let len = other_masons.len();
 
                     let claim = if let Some(DoppelMason(p)) = get_role(state, mason) {
-                        DoppelMasonAction(p, other_masons.pop())
+                        DoppelMasonAction(p, other_masons_to_zero_to_two(&other_masons))
                     } else {
-                        MasonAction(other_masons.pop())
+                        MasonAction(other_masons_to_zero_to_two(&other_masons))
                     };
 
                     match mason {
@@ -829,12 +830,16 @@ fn advance_turn_if_needed(state: &mut State,
                 }
             }
 
-            (platform.print_xy)(10, 20, &format!("You are {}", full_role_string(state.player)));
+            (platform.print_xy)(10,
+                                20,
+                                &format!("You are {}", full_role_string(state.player)));
 
             for i in 0..state.cpu_roles.len() {
                 (platform.print_xy)(10,
                                     21 + i as i32,
-                                    &format!("{} is {}", Cpu(i), full_role_string(state.cpu_roles[i])));
+                                    &format!("{} is {}",
+                                             Cpu(i),
+                                             full_role_string(state.cpu_roles[i])));
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -846,6 +851,17 @@ fn advance_turn_if_needed(state: &mut State,
 
 }
 
+fn other_masons_to_zero_to_two(other_masons: &Vec<Participant>) -> ZeroToTwo<Participant> {
+    let len = other_masons.len();
+
+    if len >= 2 {
+        Two(other_masons[0], other_masons[1])
+    } else if len == 1 {
+        One(other_masons[0])
+    } else {
+        Zero
+    }
+}
 
 fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) {
     (platform.print_xy)(x,
@@ -1773,7 +1789,7 @@ fn make_cpu_claim(state: &mut State, participant: Participant) {
     }
 }
 
-fn plausable_lie(state:&mut State, participant: Participant) -> Option<Claim> {
+fn plausable_lie(state: &mut State, participant: Participant) -> Option<Claim> {
     let other_participants = get_other_participants(state, participant);
 
     let role_vec: Vec<Role> = state.role_spec.get_role_vector();
@@ -1788,11 +1804,11 @@ fn plausable_lie(state:&mut State, participant: Participant) -> Option<Claim> {
 //TODO should this and attempt_not_to_be_picked be so similar?
 //maybe attempt_to_be_picked should look at prior claims and try to create confusion
 //and the other one should try to reduce it?
-fn attempt_to_be_picked(state:&mut State, participant: Participant) -> Claim {
+fn attempt_to_be_picked(state: &mut State, participant: Participant) -> Claim {
     plausable_lie(state, participant).unwrap_or(Simple(Werewolf))
 }
 
-fn attempt_not_to_be_picked(state:&mut State, participant: Participant) -> Claim {
+fn attempt_not_to_be_picked(state: &mut State, participant: Participant) -> Claim {
     plausable_lie(state, participant).unwrap_or(Simple(Villager))
 }
 
@@ -1823,30 +1839,30 @@ fn get_fake_insomniac_claim<R: Rng>(role_vec: &Vec<Role>, rng: &mut R) -> Option
     }
 
     if role_vec.contains(&Troublemaker) {
-    let filtered = if role_vec.contains(&Robber) {
-         role_vec.iter()
-        .filter(|&&r| is_on_village_team(r) && !is_mason(r))
-        .map(|&r| r)
-        .collect()
-     } else {
-         role_vec.iter()
-        .filter(|&&r| is_on_village_team(r) && !is_mason(r) && r != Troublemaker)
-        .map(|&r| r)
-        .collect()
+        let filtered = if role_vec.contains(&Robber) {
+            role_vec.iter()
+                .filter(|&&r| is_on_village_team(r) && !is_mason(r))
+                .map(|&r| r)
+                .collect()
+        } else {
+            role_vec.iter()
+                .filter(|&&r| is_on_village_team(r) && !is_mason(r) && r != Troublemaker)
+                .map(|&r| r)
+                .collect()
 
-    };
+        };
 
-    if let Some(&claimed_role) = get_random(&filtered, rng) {
-        Some(InsomniacAction(claimed_role))
+        if let Some(&claimed_role) = get_random(&filtered, rng) {
+            Some(InsomniacAction(claimed_role))
+        } else {
+            //TODO cnfirm that expansions make a none case (and thus the return type) necessary
+            None
+        }
+    } else if role_vec.contains(&Robber) {
+        Some(InsomniacAction(Robber))
     } else {
-        //TODO cnfirm that expansions make a none case (and thus the return type) necessary
-        None
+        Some(InsomniacAction(Insomniac))
     }
-} else if role_vec.contains(&Robber) {
-    Some(InsomniacAction(Robber))
-} else {
-    Some(InsomniacAction(Insomniac))
-}
 }
 
 fn get_random<'a, T, R: Rng>(things: &'a Vec<T>, rng: &mut R) -> Option<&'a T> {
@@ -1946,21 +1962,21 @@ fn push_claim_lines(state: &State,
                 result.push(format!("You claim you copied {}.", doppel_target));
                 push_claim_lines(state, result, &(participant, Simple(role)));
             }
-            MasonAction(Some(other_mason)) => {
+            MasonAction(Two(other_mason1, other_mason2)) => {
+                result.push(format!("You claim that you are {} and so is {} and {}",
+                                    Mason,
+                                    other_mason1,
+                                    other_mason2));
+            }
+            MasonAction(One(other_mason)) => {
                 result.push(format!("You claim that you are {} and so is {}", Mason, other_mason));
             }
-            DoppelMasonAction(doppel_target, Some(other_mason)) => {
-                result.push(format!("You claim you copied {}.", doppel_target));
-                push_claim_lines(state,
-                                 result,
-                                 &(participant, MasonAction(Some(other_mason))));
-            }
-            MasonAction(None) => {
+            MasonAction(Zero) => {
                 result.push(format!("You claim that you are {} but no one else is", Mason));
             }
-            DoppelMasonAction(doppel_target, None) => {
+            DoppelMasonAction(doppel_target, other_masons) => {
                 result.push(format!("You claim you copied {}.", doppel_target));
-                push_claim_lines(state, result, &(participant, MasonAction(None)));
+                push_claim_lines(state, result, &(participant, MasonAction(other_masons)));
             }
             RobberAction(p, role) => {
                 result.push(format!("You claim that you are {}", Robber));
@@ -2036,7 +2052,17 @@ fn push_claim_lines(state: &State,
                 result.push(format!("{} claims they copied {}", participant, doppel_target));
                 push_claim_lines(state, result, &(participant, Simple(role)));
             }
-            MasonAction(Some(other_mason)) => {
+            MasonAction(Two(other_mason1, other_mason2)) => {
+
+                result.push(format!("{} claims that they are {} and so are {} and {}",
+                                    participant,
+                                    Mason,
+
+                                    other_mason1,
+                                    other_mason2));
+            }
+
+            MasonAction(One(other_mason)) => {
                 let verb_form = if other_mason == Player { "are" } else { "is" };
                 result.push(format!("{} claims that they are {} and so {} {}",
                                     participant,
@@ -2044,20 +2070,14 @@ fn push_claim_lines(state: &State,
                                     verb_form,
                                     other_mason));
             }
-            DoppelMasonAction(doppel_target, Some(other_mason)) => {
-                result.push(format!("{} claims they copied {}", participant, doppel_target));
-                push_claim_lines(state,
-                                 result,
-                                 &(participant, MasonAction(Some(other_mason))));
-            }
-            MasonAction(None) => {
+            MasonAction(Zero) => {
                 result.push(format!("{} claims that they are {} but no one else is",
                                     participant,
                                     Mason));
             }
-            DoppelMasonAction(doppel_target, None) => {
+            DoppelMasonAction(doppel_target, other_masons) => {
                 result.push(format!("{} claims they copied {}", participant, doppel_target));
-                push_claim_lines(state, result, &(participant, MasonAction(None)));
+                push_claim_lines(state, result, &(participant, MasonAction(other_masons)));
             }
             RobberAction(p, role) => {
                 result.push(format!("{} claims that they are {}", participant, Robber));
