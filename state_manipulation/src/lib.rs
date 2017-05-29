@@ -449,7 +449,6 @@ fn advance_turn_if_needed(state: &mut State,
 
             if ready {
                 for &mason in masons.iter() {
-                    println!("mason {}", mason);
                     let mut other_masons: Vec<Participant> = masons.iter()
                         .filter(|&&p| p != mason)
                         .map(|&p| p)
@@ -475,13 +474,13 @@ fn advance_turn_if_needed(state: &mut State,
                         }
                         Cpu(index) => {
                             let ref mut knowledge = state.cpu_knowledge[index];
-                            println!("pre {:?}", knowledge.known_villagers);
+
                             if len == 0 {
                                 knowledge.known_non_active.insert(Mason);
                             } else {
                                 knowledge.known_villagers.extend(masons.iter());
                             }
-                            println!("post {:?}", knowledge.known_villagers);
+
 
                             knowledge.true_claim = claim;
                         }
