@@ -240,6 +240,24 @@ fn advance_turn_if_needed(state: &mut State,
 
             //TODO pick roles and number of players
 
+            let reroll_spec = ButtonSpec {
+                x: 16,
+                y: 0,
+                w: 15,
+                h: 3,
+                text: "Randomize".to_string(),
+                id: 6,
+            };
+
+            if do_button(platform,
+                         &mut state.ui_context,
+                         &reroll_spec,
+                         left_mouse_pressed,
+                         left_mouse_released) {
+                state.role_spec = state.rng.gen::<RoleSpec>();
+            }
+
+
             display_role_spec(platform, 10, 10, &state.role_spec);
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -2444,6 +2462,8 @@ fn get_vote(participant: Participant,
             knowledge: &Knowledge,
             rng: &mut StdRng)
             -> Participant {
+    //TODO count the number of valid ways that a given set of claims being true would be consistent
+    //given known facts and assume those claims are true
     let filtered: Vec<Participant> = if is_werewolf(knowledge.role) || knowledge.role == Minion {
         let mut vec: Vec<Participant> = knowledge.known_villagers
             .iter()
