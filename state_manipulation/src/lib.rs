@@ -2101,12 +2101,10 @@ fn push_claim_lines(state: &State,
                 push_claim_lines(state, result, &(participant, SeerRevealOneAction(p, role)));
             }
             SeerRevealTwoAction(centerpair, role1, role2) => {
-                result.push(format!("{} claims that they are {}", participant, Seer));
-                let message = format!("and they looked at the {} cards and they were {} and {}",
-                                      centerpair,
-                                      role1,
-                                      role2);
+                result.push(format!("{} claims that they are {},", participant, Seer));
+                let message = format!("they looked at the {} cards,", centerpair);
                 result.push(message);
+                result.push(format!("and they were {} and {}", role1, role2));
             }
             DoppelSeerRevealTwoAction(doppel_target, centerpair, role1, role2) => {
                 result.push(format!("{} claims they copied {}", participant, doppel_target));
@@ -2117,7 +2115,7 @@ fn push_claim_lines(state: &State,
             TroublemakerAction(p1, p2) => {
                 result.push(format!("{} claims that they are {}", participant, Troublemaker));
                 result.push("and they swapeed the roles of the following two players:".to_string());
-                let message = format!("    {} and {}.", p1, p2);
+                let message = format!("{} and {}.", p1, p2);
                 result.push(message);
             }
             DoppelTroublemakerAction(doppel_target, p1, p2) => {
