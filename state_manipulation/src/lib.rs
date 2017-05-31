@@ -23,7 +23,7 @@ pub fn new_state(size: Size) -> State {
     println!("debug on");
 
     let seed: &[_] = &[42];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let rng: StdRng = SeedableRng::from_seed(seed);
 
     make_state(size, false, rng)
 }
@@ -44,7 +44,7 @@ pub fn new_state(size: Size) -> State {
 }
 
 
-fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
+fn make_state(_: Size, title_screen: bool, mut rng: StdRng) -> State {
     let role_spec = rng.gen::<RoleSpec>();
 
     let (player, cpu_roles, table_roles, player_knowledge, cpu_knowledge, _) =
@@ -137,8 +137,6 @@ pub fn update_and_render(platform: &Platform, state: &mut State, events: &mut Ve
             }
         }
 
-        draw(platform, state);
-
         false
     } else {
         game_update_and_render(platform, state, events)
@@ -215,8 +213,6 @@ pub fn game_update_and_render(platform: &Platform,
         state.show_role_spec = !state.show_role_spec;
     }
 
-
-
     if state.show_role_spec {
         display_role_spec(platform, 10, 10, &state.role_spec);
     } else {
@@ -227,8 +223,6 @@ pub fn game_update_and_render(platform: &Platform,
             println!("{:?}", state.turn);
         }
     }
-
-    draw(platform, state);
 
     false
 }
@@ -276,19 +270,8 @@ fn advance_turn_if_needed(state: &mut State,
                 state.role_spec = Default::default();
             }
 
-            let columns = vec![
-                vec![Werewolf,
-                Minion,
-                Robber,
-                Mason,
-                Seer,
-                Troublemaker,
-                Drunk],
-                vec![Insomniac,
-                Villager,
-                Tanner,
-                Hunter,
-                DoppelVillager(Player)]];
+            let columns = vec![vec![Werewolf, Minion, Robber, Mason, Seer, Troublemaker, Drunk],
+                               vec![Insomniac, Villager, Tanner, Hunter, DoppelVillager(Player)]];
 
             let mut max_column_length = 0;
 
@@ -307,19 +290,18 @@ fn advance_turn_if_needed(state: &mut State,
                     let control_spec = IntegerAdjusterSpec {
                         x: 2 + (j as i32 * 34),
                         y: 12 + (4 * index),
-                        w : 20,
+                        w: 20,
                         text: format!("{:o} count", role),
                         id_prefix: 700 + (2 * index) + (j * 2 * max_column_length) as i32,
                     };
-
-                    let count = state.role_spec.get_count(&role) as i32;
 
                     match do_integer_adjuster(platform,
                                               &mut state.ui_context,
                                               &control_spec,
                                               left_mouse_pressed,
                                               left_mouse_released,
-                                              count, state.role_spec.can_remove(&role), state.role_spec.can_add(&role)) {
+                                              state.role_spec.can_remove(&role),
+                                              state.role_spec.can_add(&role)) {
                         Increment => {
                             state.role_spec.add(&role);
                         }
@@ -330,7 +312,7 @@ fn advance_turn_if_needed(state: &mut State,
                     };
                 }
             }
-        (platform.print_xy)(10, 5, "Ready to start a game?");
+            (platform.print_xy)(10, 5, "Ready to start a game?");
 
             display_role_spec(platform, 10, 7, &state.role_spec);
 
@@ -523,7 +505,7 @@ fn advance_turn_if_needed(state: &mut State,
 
             if ready {
                 for &mason in masons.iter() {
-                    let mut other_masons: Vec<Participant> = masons.iter()
+                    let other_masons: Vec<Participant> = masons.iter()
                         .filter(|&&p| p != mason)
                         .map(|&p| p)
                         .collect();
@@ -680,7 +662,7 @@ fn advance_turn_if_needed(state: &mut State,
                                             left_mouse_pressed,
                                             left_mouse_released) {
                 match player_claim_or_silence {
-                    ActualClaim(player_claim) => insert_claim(state, Player, player_claim),
+                    // ActualClaim(player_claim) => insert_claim(state, Player, player_claim),
                     Silence => {}
                 }
 
@@ -694,7 +676,7 @@ fn advance_turn_if_needed(state: &mut State,
             for i in 0..lines.len() {
                 let index = i as i32;
 
-                (platform.print_xy)(10, 4 + (index), &lines[i]);
+                (platform.print_xy)(10, MAX_CLAIM_HEIGHT + (index), &lines[i]);
             }
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
@@ -959,7 +941,8 @@ fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) 
 
     (platform.print_xy)(x,
                         y,
-                        &format!("Cpu Players: {}", role_spec.get_cpu_player_count(Some(&role_vec))));
+                        &format!("Cpu Players: {}",
+                                 role_spec.get_cpu_player_count(Some(&role_vec))));
 
     //Here's the Run Length Encoder (RLE), in case you're grepping for it.
     let pairs = role_vec.iter().fold(Vec::new(), |mut acc, &role| {
@@ -1078,7 +1061,7 @@ fn insomniac_turn(state: &mut State,
                   name: &str) {
 
     if player_pred(state) {
-        (platform.print_xy)(15, 3, "Insomniac, wake up and look at your card.");
+        (platform.print_xy)(15, 3, &format!("{}, wake up and look at your card.", name));
 
         (platform.print_xy)(15, 5, &format!("You are {}", state.player));
         state.player_knowledge.true_claim = action(state, Player, state.player);
@@ -1153,8 +1136,9 @@ fn drunk_turn(state: &mut State,
     if player_pred(state) {
         (platform.print_xy)(15,
                             3,
-                            "Drunk, wake up
-and exchange your card with a card from the center.");
+                            &format!("{}, wake up
+and exchange your card with a card from the center.",
+                                     name));
 
         let choice = pick_displayable(platform,
                                       state,
@@ -1287,8 +1271,9 @@ fn troublemaker_turn(state: &mut State,
     if player_pred(state) {
         (platform.print_xy)(15,
                             3,
-                            "Troublemaker, wake up.
-You may exchange cards between two other players.");
+                            &format!("{}, wake up.
+You may exchange cards between two other players.",
+                                     name));
 
         (platform.print_xy)(15, 5, "Choose the first other player:");
 
@@ -1482,15 +1467,10 @@ fn get_doppel_robber_index(state: &State) -> Option<usize> {
     })
 }
 
-fn reveal_one_turn(state: &State, participant: Participant, p: Participant, r: Role) -> Claim {
+fn reveal_one_turn(_: &State, _: Participant, p: Participant, r: Role) -> Claim {
     SeerRevealOneAction(p, r)
 }
-fn reveal_two_turn(state: &State,
-                   participant: Participant,
-                   pair: CenterPair,
-                   r1: Role,
-                   r2: Role)
-                   -> Claim {
+fn reveal_two_turn(_: &State, _: Participant, pair: CenterPair, r1: Role, r2: Role) -> Claim {
     SeerRevealTwoAction(pair, r1, r2)
 }
 
@@ -1806,7 +1786,6 @@ fn swap_team_if_known(knowledge: &mut Knowledge, participant: Participant) {
 }
 
 
-
 fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
     let rs = state.table_roles;
     match pair {
@@ -1817,13 +1796,6 @@ fn get_role_pair(state: &State, pair: CenterPair) -> (Role, Role) {
 }
 
 const MAX_CLAIM_HEIGHT: i32 = 4;
-
-fn get_initial_role(state: &State, participant: Participant) -> Option<&Role> {
-    match participant {
-        Player => Some(&state.initial_player),
-        Cpu(index) => state.initial_cpu_roles.get(index),
-    }
-}
 
 fn get_knowledge(state: &State, participant: Participant) -> Option<&Knowledge> {
     match participant {
@@ -1967,7 +1939,7 @@ fn get_random<'a, T, R: Rng>(things: &'a Vec<T>, rng: &mut R) -> Option<&'a T> {
 }
 
 enum ClaimOrSilence {
-    ActualClaim(Claim),
+    // ActualClaim(Claim),
     Silence,
 }
 use ClaimOrSilence::*;
@@ -2649,12 +2621,10 @@ fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Eve
     }
 }
 
-fn draw(platform: &Platform, state: &State) {}
-
 struct IntegerAdjusterSpec {
     x: i32,
     y: i32,
-    w :i32,
+    w: i32,
     text: String,
     id_prefix: UiId,
 }
@@ -2675,7 +2645,8 @@ fn do_integer_adjuster(platform: &Platform,
                        spec: &IntegerAdjusterSpec,
                        left_mouse_pressed: bool,
                        left_mouse_released: bool,
-                       value: i32, can_decrement: bool, can_increment:bool)
+                       can_decrement: bool,
+                       can_increment: bool)
                        -> IntegerAdjustment {
 
     if can_decrement {
@@ -2700,13 +2671,18 @@ fn do_integer_adjuster(platform: &Platform,
 
     let width = std::cmp::max(spec.w, spec.text.len() as i32);
 
-    print_centered_line(platform, spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH, spec.y, width, INTEGER_ADJUSTMENT_BUTTON_HEIGHT, &spec.text);
+    print_centered_line(platform,
+                        spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH,
+                        spec.y,
+                        width,
+                        INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
+                        &spec.text);
 
     if can_increment {
 
         let plus_spec = ButtonSpec {
-            x: spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH + INTEGER_ADJUSTMENT_MARGIN +
-               width + INTEGER_ADJUSTMENT_MARGIN,
+            x: spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH + INTEGER_ADJUSTMENT_MARGIN + width +
+               INTEGER_ADJUSTMENT_MARGIN,
             y: spec.y,
             w: INTEGER_ADJUSTMENT_BUTTON_WIDTH,
             h: INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
@@ -2813,15 +2789,6 @@ fn draw_rect(platform: &Platform, x: i32, y: i32, w: i32, h: i32) {
                    w,
                    h,
                    ["┌", "─", "┐", "│", "│", "└", "─", "┘"]);
-}
-
-fn draw_double_line_rect(platform: &Platform, x: i32, y: i32, w: i32, h: i32) {
-    draw_rect_with(platform,
-                   x,
-                   y,
-                   w,
-                   h,
-                   ["╔", "═", "╗", "║", "║", "╚", "═", "╝"]);
 }
 
 fn draw_rect_with(platform: &Platform, x: i32, y: i32, w: i32, h: i32, edges: [&str; 8]) {
