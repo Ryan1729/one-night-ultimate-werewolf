@@ -211,7 +211,6 @@ pub fn full_role_string(role: Role) -> String {
 
 #[derive(Clone,Copy, PartialEq, Debug)]
 pub struct RoleSpec {
-    pub cpu_player_count: u8,
     pub villager1: bool,
     pub villager2: bool,
     pub villager3: bool,
@@ -237,10 +236,23 @@ macro_rules! add_role{
     }
 }
 
+macro_rules! bool_to_int {
+    ($($int: expr), +) =>  {
+        0 $( + if $int {
+            1
+        } else {
+            0
+        })+
+    }
+}
+
+
+//2 cpu players minimum, 1 for the player and 3 for the center
+const MINIMUM_CARDS : usize = 2 + 1 + 3;
+
 impl RoleSpec {
     pub fn get_role_vector(&self) -> Vec<Role> {
-        //1 for the player and 3 for the center
-        let cards_needed = self.cpu_player_count as usize + 4;
+
         let mut result = Vec::new();
 
         add_role!(result, self.villager1, Villager);
@@ -254,7 +266,7 @@ impl RoleSpec {
         add_role!(result, self.tanner, Tanner);
         add_role!(result, self.drunk, Drunk);
         add_role!(result, self.hunter, Hunter);
-        //only either 0 or 2 masoins
+        //only either 0 or 2 masons
         add_role!(result, self.masons, Mason);
         add_role!(result, self.masons, Mason);
         add_role!(result, self.insomniac, Insomniac);
@@ -262,18 +274,294 @@ impl RoleSpec {
         //DoppelVillager(Player) represents the Doppelganger card
         add_role!(result, self.doppelganger, DoppelVillager(Player));
 
-        while result.len() < cards_needed {
+        while result.len() < MINIMUM_CARDS {
             result.insert(0, Villager);
         }
 
         result
+    }
+
+    pub fn get_cpu_player_count(&self, optional_role_vector:Option<&Vec<Role>>) -> u32 {
+        if let Some(v) = optional_role_vector{
+            RoleSpec::get_cpu_player_count_from_vector(&v)
+        } else {
+            RoleSpec::get_cpu_player_count_from_vector(&self.get_role_vector())
+        }
+    }
+
+    fn get_cpu_player_count_from_vector(role_vector: &Vec<Role>) -> u32 {
+        (role_vector.len() as u32).saturating_sub(3 + 1)
+    }
+
+    pub fn get_count(&self, role: &Role) -> u32 {
+        match *role {
+            Werewolf => bool_to_int!(self.werewolf1, self.werewolf2),
+            Minion => bool_to_int!(self.minion),
+            Robber => bool_to_int!(self.robber),
+            //only either 0 or 2 masons
+            Mason => bool_to_int!(self.masons) * 2,
+            Seer => bool_to_int!(self.seer),
+            Troublemaker => bool_to_int!(self.troublemaker),
+            Drunk => bool_to_int!(self.drunk),
+            Insomniac => bool_to_int!(self.insomniac),
+            Villager => bool_to_int!(self.villager1, self.villager2, self.villager3),
+            Tanner => bool_to_int!(self.tanner),
+            Hunter => bool_to_int!(self.hunter),
+            DoppelWerewolf(_) |
+            DoppelMinion(_) |
+            DoppelRobber(_) |
+            DoppelMason(_) |
+            DoppelSeer(_) |
+            DoppelTroublemaker(_) |
+            DoppelDrunk(_) |
+            DoppelInsomniac(_) |
+            DoppelVillager(_) |
+            DoppelTanner(_) |
+            DoppelHunter(_) => bool_to_int!(self.doppelganger),
+        }
+    }
+
+    pub fn add(&mut self, role: &Role) {
+        match *role {
+            Werewolf => {
+                if self.werewolf1 {
+                    self.werewolf2 = true;
+                } else {
+                    self.werewolf1 = true;
+                }
+            }
+            Minion => {
+                self.minion = true;
+            }
+            Robber => {
+                self.robber = true;
+            }
+            //only either 0 or 2 masons
+            Mason => {
+                self.masons = true;
+            }
+            Seer => {
+                self.seer = true;
+            }
+            Troublemaker => {
+                self.troublemaker = true;
+            }
+            Drunk => {
+                self.drunk = true;
+            }
+            Insomniac => {
+                self.insomniac = true;
+            }
+            Villager => {
+                if self.villager1 {
+                    if self.villager2 {
+                        self.villager3 = true;
+                    } else {
+                        self.villager2 = true;
+                    }
+                } else {
+                    self.villager1 = true;
+                }
+            }
+            Tanner => {
+                self.tanner = true;
+            }
+            Hunter => {
+                self.hunter = true;
+            }
+            DoppelWerewolf(_) |
+            DoppelMinion(_) |
+            DoppelRobber(_) |
+            DoppelMason(_) |
+            DoppelSeer(_) |
+            DoppelTroublemaker(_) |
+            DoppelDrunk(_) |
+            DoppelInsomniac(_) |
+            DoppelVillager(_) |
+            DoppelTanner(_) |
+            DoppelHunter(_) => {
+                self.doppelganger = true;
+            }
+        }
+    }
+
+    pub fn can_add(&mut self, role: &Role) -> bool {
+        let cpu_player_count = self.get_cpu_player_count(None);
+
+        if cpu_player_count >= 9 {
+            return false;
+        }
+
+        match *role {
+            Werewolf => {
+                !self.werewolf2 || !self.werewolf1
+            }
+            Minion => {
+                !self.minion
+            }
+            Robber => {
+                !self.robber
+            }
+            Mason =>  !self.masons && cpu_player_count < 8,
+            Seer => {
+                !self.seer
+            }
+            Troublemaker => {
+                !self.troublemaker
+            }
+            Drunk => {
+                !self.drunk
+            }
+            Insomniac => {
+                !self.insomniac
+            }
+            Villager => {
+                !self.villager3 || !self.villager2 || !self.villager1
+            }
+            Tanner => {
+                !self.tanner
+            }
+            Hunter => {
+                !self.hunter
+            }
+            DoppelWerewolf(_) |
+            DoppelMinion(_) |
+            DoppelRobber(_) |
+            DoppelMason(_) |
+            DoppelSeer(_) |
+            DoppelTroublemaker(_) |
+            DoppelDrunk(_) |
+            DoppelInsomniac(_) |
+            DoppelVillager(_) |
+            DoppelTanner(_) |
+            DoppelHunter(_) => {
+                !self.doppelganger
+            }
+            }
+    }
+
+    pub fn remove(&mut self, role: &Role) {
+        if self.can_remove(role) {
+        match *role {
+            Werewolf => {
+                if self.werewolf2 {
+                    self.werewolf2 = false;
+                } else {
+                    self.werewolf1 = false;
+                }
+            }
+            Minion => {
+                self.minion = false;
+            }
+            Robber => {
+                self.robber = false;
+            }
+            Mason =>  {self.masons = false;}
+            Seer => {
+                self.seer = false;
+            }
+            Troublemaker => {
+                self.troublemaker = false;
+            }
+            Drunk => {
+                self.drunk = false;
+            }
+            Insomniac => {
+                self.insomniac = false;
+            }
+            Villager => {
+                if self.villager3 {
+                    self.villager3 = false;
+                } else {
+                    if self.villager2 {
+                        self.villager2 = false;
+                    } else {
+                        self.villager1 = false;
+                    }
+                }
+            }
+            Tanner => {
+                self.tanner = false;
+            }
+            Hunter => {
+                self.hunter = false;
+            }
+            DoppelWerewolf(_) |
+            DoppelMinion(_) |
+            DoppelRobber(_) |
+            DoppelMason(_) |
+            DoppelSeer(_) |
+            DoppelTroublemaker(_) |
+            DoppelDrunk(_) |
+            DoppelInsomniac(_) |
+            DoppelVillager(_) |
+            DoppelTanner(_) |
+            DoppelHunter(_) => {
+                self.doppelganger = false;
+            }
+        }
+    };
+    }
+
+    pub fn can_remove(&mut self, role: &Role) -> bool {
+        let cpu_player_count = self.get_cpu_player_count(None);
+
+        if cpu_player_count < 3 {
+            return false;
+        }
+
+        match *role {
+            Werewolf => {
+                 self.werewolf2 || self.werewolf1
+            }
+            Minion => {
+                self.minion
+            }
+            Robber => {
+                self.robber
+            }
+            Mason =>  self.masons && cpu_player_count >= 4,
+            Seer => {
+                self.seer
+            }
+            Troublemaker => {
+                self.troublemaker
+            }
+            Drunk => {
+                self.drunk
+            }
+            Insomniac => {
+                self.insomniac
+            }
+            Villager => {
+                self.villager3 || self.villager2 ||self.villager1
+            }
+            Tanner => {
+                self.tanner
+            }
+            Hunter => {
+                self.hunter
+            }
+            DoppelWerewolf(_) |
+            DoppelMinion(_) |
+            DoppelRobber(_) |
+            DoppelMason(_) |
+            DoppelSeer(_) |
+            DoppelTroublemaker(_) |
+            DoppelDrunk(_) |
+            DoppelInsomniac(_) |
+            DoppelVillager(_) |
+            DoppelTanner(_) |
+            DoppelHunter(_) => {
+                self.doppelganger
+            }
+}
     }
 }
 
 impl Default for RoleSpec {
     fn default() -> RoleSpec {
         RoleSpec {
-            cpu_player_count: 3,
             werewolf1: true,
             werewolf2: true,
             villager1: true,
@@ -324,7 +612,6 @@ impl Rand for RoleSpec {
         rng.shuffle(&mut deck);
 
         RoleSpec {
-            cpu_player_count,
             werewolf1,
             werewolf2: deck.pop().unwrap_or(false),
             seer: deck.pop().unwrap_or(false),

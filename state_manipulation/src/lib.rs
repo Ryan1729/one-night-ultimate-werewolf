@@ -233,15 +233,14 @@ pub fn game_update_and_render(platform: &Platform,
     false
 }
 
+
 fn advance_turn_if_needed(state: &mut State,
                           platform: &Platform,
                           left_mouse_pressed: bool,
                           left_mouse_released: bool) {
     match state.turn {
         Ready => {
-            (platform.print_xy)(10, 8, "Ready to start a game?");
 
-            //TODO pick roles and number of players
 
             let reroll_spec = ButtonSpec {
                 x: 16,
@@ -277,8 +276,63 @@ fn advance_turn_if_needed(state: &mut State,
                 state.role_spec = Default::default();
             }
 
+            let columns = vec![
+                vec![Werewolf,
+                Minion,
+                Robber,
+                Mason,
+                Seer,
+                Troublemaker,
+                Drunk],
+                vec![Insomniac,
+                Villager,
+                Tanner,
+                Hunter,
+                DoppelVillager(Player)]];
 
-            display_role_spec(platform, 10, 10, &state.role_spec);
+            let mut max_column_length = 0;
+
+            for j in 0..columns.len() {
+                let roles = &columns[j];
+
+                let len = roles.len();
+
+                max_column_length = std::cmp::max(max_column_length, len);
+
+                for i in 0..len {
+                    let role = roles[i];
+
+                    let index = i as i32;
+
+                    let control_spec = IntegerAdjusterSpec {
+                        x: 2 + (j as i32 * 34),
+                        y: 12 + (4 * index),
+                        w : 20,
+                        text: format!("{:o} count", role),
+                        id_prefix: 700 + (2 * index) + (j * 2 * max_column_length) as i32,
+                    };
+
+                    let count = state.role_spec.get_count(&role) as i32;
+
+                    match do_integer_adjuster(platform,
+                                              &mut state.ui_context,
+                                              &control_spec,
+                                              left_mouse_pressed,
+                                              left_mouse_released,
+                                              count, state.role_spec.can_remove(&role), state.role_spec.can_add(&role)) {
+                        Increment => {
+                            state.role_spec.add(&role);
+                        }
+                        Decrement => {
+                            state.role_spec.remove(&role);
+                        }
+                        NoChange => {}
+                    };
+                }
+            }
+        (platform.print_xy)(10, 5, "Ready to start a game?");
+
+            display_role_spec(platform, 10, 7, &state.role_spec);
 
             if ready_button(platform, state, left_mouse_pressed, left_mouse_released) {
                 let (player,
@@ -901,11 +955,11 @@ fn other_masons_to_zero_to_two(other_masons: &Vec<Participant>) -> ZeroToTwo<Par
 }
 
 fn display_role_spec(platform: &Platform, x: i32, y: i32, role_spec: &RoleSpec) {
+    let role_vec = role_spec.get_role_vector();
+
     (platform.print_xy)(x,
                         y,
-                        &format!("Cpu Players: {}", role_spec.cpu_player_count));
-
-    let role_vec = role_spec.get_role_vector();
+                        &format!("Cpu Players: {}", role_spec.get_cpu_player_count(Some(&role_vec))));
 
     //Here's the Run Length Encoder (RLE), in case you're grepping for it.
     let pairs = role_vec.iter().fold(Vec::new(), |mut acc, &role| {
@@ -2596,6 +2650,81 @@ fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Eve
 }
 
 fn draw(platform: &Platform, state: &State) {}
+
+struct IntegerAdjusterSpec {
+    x: i32,
+    y: i32,
+    w :i32,
+    text: String,
+    id_prefix: UiId,
+}
+
+enum IntegerAdjustment {
+    Decrement,
+    NoChange,
+    Increment,
+}
+use IntegerAdjustment::*;
+
+const INTEGER_ADJUSTMENT_BUTTON_WIDTH: i32 = 5;
+const INTEGER_ADJUSTMENT_BUTTON_HEIGHT: i32 = 3;
+const INTEGER_ADJUSTMENT_MARGIN: i32 = 1;
+
+fn do_integer_adjuster(platform: &Platform,
+                       context: &mut UIContext,
+                       spec: &IntegerAdjusterSpec,
+                       left_mouse_pressed: bool,
+                       left_mouse_released: bool,
+                       value: i32, can_decrement: bool, can_increment:bool)
+                       -> IntegerAdjustment {
+
+    if can_decrement {
+
+        let minus_spec = ButtonSpec {
+            x: spec.x,
+            y: spec.y,
+            w: INTEGER_ADJUSTMENT_BUTTON_WIDTH,
+            h: INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
+            text: "-".to_string(),
+            id: spec.id_prefix,
+        };
+
+        if do_button(platform,
+                     context,
+                     &minus_spec,
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            return Decrement;
+        }
+    }
+
+    let width = std::cmp::max(spec.w, spec.text.len() as i32);
+
+    print_centered_line(platform, spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH, spec.y, width, INTEGER_ADJUSTMENT_BUTTON_HEIGHT, &spec.text);
+
+    if can_increment {
+
+        let plus_spec = ButtonSpec {
+            x: spec.x + INTEGER_ADJUSTMENT_BUTTON_WIDTH + INTEGER_ADJUSTMENT_MARGIN +
+               width + INTEGER_ADJUSTMENT_MARGIN,
+            y: spec.y,
+            w: INTEGER_ADJUSTMENT_BUTTON_WIDTH,
+            h: INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
+            text: "+".to_string(),
+            id: spec.id_prefix + 1,
+        };
+
+        if do_button(platform,
+                     context,
+                     &plus_spec,
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            return Increment;
+        }
+    }
+
+    NoChange
+}
 
 pub struct ButtonSpec {
     pub x: i32,
