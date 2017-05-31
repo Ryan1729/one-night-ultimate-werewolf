@@ -172,22 +172,25 @@ pub fn game_update_and_render(platform: &Platform,
 
     state.ui_context.frame_init();
 
-    let next_spec = ButtonSpec {
-        x: 0,
-        y: 0,
-        w: 10,
-        h: 3,
-        text: "Next".to_string(),
-        id: 1,
-    };
+    if cfg!(debug_assertions) {
 
-    if do_button(platform,
-                 &mut state.ui_context,
-                 &next_spec,
-                 left_mouse_pressed,
-                 left_mouse_released) {
-        state.turn = state.turn.next();
-    }
+        let next_spec = ButtonSpec {
+            x: 0,
+            y: 0,
+            w: 10,
+            h: 3,
+            text: "Next".to_string(),
+            id: 1,
+        };
+
+        if do_button(platform,
+                     &mut state.ui_context,
+                     &next_spec,
+                     left_mouse_pressed,
+                     left_mouse_released) {
+            state.turn = state.turn.next();
+        }
+    };
 
     let size = (platform.size)();
 
@@ -255,6 +258,23 @@ fn advance_turn_if_needed(state: &mut State,
                          left_mouse_pressed,
                          left_mouse_released) {
                 state.role_spec = state.rng.gen::<RoleSpec>();
+            }
+
+            let beginner_spec = ButtonSpec {
+                x: 34,
+                y: 0,
+                w: 15,
+                h: 3,
+                text: "Beginner mode".to_string(),
+                id: 7,
+            };
+
+            if do_button(platform,
+                         &mut state.ui_context,
+                         &beginner_spec,
+                         left_mouse_pressed,
+                         left_mouse_released) {
+                state.role_spec = Default::default();
             }
 
 
