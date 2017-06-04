@@ -177,7 +177,7 @@ pub fn game_update_and_render(platform: &Platform,
             y: 0,
             w: 10,
             h: 3,
-            text: "Next".to_string(),
+            text: "Next".to_owned(),
             id: 1,
         };
 
@@ -198,9 +198,9 @@ pub fn game_update_and_render(platform: &Platform,
         w: 24,
         h: 3,
         text: if state.show_role_spec {
-            "Back to game".to_string()
+            "Back to game".to_owned()
         } else {
-            "Show Available Roles".to_string()
+            "Show Available Roles".to_owned()
         },
         id: 3,
     };
@@ -234,14 +234,12 @@ fn advance_turn_if_needed(state: &mut State,
                           left_mouse_released: bool) {
     match state.turn {
         Ready => {
-
-
             let reroll_spec = ButtonSpec {
                 x: 16,
                 y: 0,
                 w: 15,
                 h: 3,
-                text: "Randomize".to_string(),
+                text: "Randomize".to_owned(),
                 id: 6,
             };
 
@@ -258,7 +256,7 @@ fn advance_turn_if_needed(state: &mut State,
                 y: 0,
                 w: 15,
                 h: 3,
-                text: "Beginner mode".to_string(),
+                text: "Beginner mode".to_owned(),
                 id: 7,
             };
 
@@ -1251,7 +1249,7 @@ fn troublemaker_second_choice(state: &mut State,
                       y: 8,
                       w: 11,
                       h: 3,
-                      text: "Back".to_string(),
+                      text: "Back".to_owned(),
                       id: 11,
                   },
                  left_mouse_pressed,
@@ -1955,7 +1953,7 @@ fn get_player_claim_or_silence(platform: &Platform,
         y: 0,
         w: 20,
         h: 3,
-        text: "Remain Silent".to_string(),
+        text: "Remain Silent".to_owned(),
         id: 60,
     };
 
@@ -1994,7 +1992,7 @@ fn claims_to_lines(state: &State, claims: Vec<(Participant, Claim)>) -> Vec<Stri
 
     for pair in claims.iter() {
         push_claim_lines(state, &mut result, pair);
-        result.push("".to_string());
+        result.push("".to_owned());
     }
 
     result
@@ -2177,7 +2175,7 @@ fn push_claim_lines(state: &State,
             }
             TroublemakerAction(p1, p2) => {
                 result.push(format!("{} claims that they are {}", participant, Troublemaker));
-                result.push("and they swapeed the roles of the following two players:".to_string());
+                result.push("and they swapeed the roles of the following two players:".to_owned());
                 let message = format!("{} and {}.", p1, p2);
                 result.push(message);
             }
@@ -2230,13 +2228,13 @@ use std::fmt::Write;
 fn str_list<T: std::fmt::Display>(things: &Vec<T>) -> String {
     let len = things.len();
     if len == 0 {
-        "".to_string()
+        "".to_owned()
     } else if len == 1 {
         format!("{}", things[0])
     } else if len == 2 {
         format!("{} and {}", things[0], things[1])
     } else {
-        let mut result = "".to_string();
+        let mut result = "".to_owned();
 
         for i in 0..len - 1 {
             if i == len - 2 {
@@ -2377,7 +2375,7 @@ fn pick_cpu_player_or_skip(platform: &Platform,
                           y: 8,
                           w: 11,
                           h: 3,
-                          text: "Skip".to_string(),
+                          text: "Skip".to_owned(),
                           id: 11,
                       },
                      left_mouse_pressed,
@@ -2599,7 +2597,7 @@ fn ready_button(platform: &Platform,
         y: size.height - 4,
         w: 11,
         h: 3,
-        text: "Ready".to_string(),
+        text: "Ready".to_owned(),
         id: 2,
     };
 
@@ -2656,7 +2654,7 @@ fn do_integer_adjuster(platform: &Platform,
             y: spec.y,
             w: INTEGER_ADJUSTMENT_BUTTON_WIDTH,
             h: INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
-            text: "-".to_string(),
+            text: "-".to_owned(),
             id: spec.id_prefix,
         };
 
@@ -2686,7 +2684,7 @@ fn do_integer_adjuster(platform: &Platform,
             y: spec.y,
             w: INTEGER_ADJUSTMENT_BUTTON_WIDTH,
             h: INTEGER_ADJUSTMENT_BUTTON_HEIGHT,
-            text: "+".to_string(),
+            text: "+".to_owned(),
             id: spec.id_prefix + 1,
         };
 
