@@ -654,18 +654,20 @@ fn advance_turn_if_needed(state: &mut State,
         }
         Discuss => {
             //TODO player can make claims to affect cpu players claims
-            if let Some(player_claim_or_silence) =
-                get_player_claim_or_silence(platform,
-                                            state,
-                                            left_mouse_pressed,
-                                            left_mouse_released) {
-                match player_claim_or_silence {
-                    // ActualClaim(player_claim) => insert_claim(state, Player, player_claim),
-                    Silence => {}
-                }
-
-                make_remaining_claims(state);
-            }
+            // if let Some(player_claim_or_silence) =
+            //     get_player_claim_or_silence(platform,
+            //                                 state,
+            //                                 left_mouse_pressed,
+            //                                 left_mouse_released) {
+            //     match player_claim_or_silence {
+            //         // ActualClaim(player_claim) => insert_claim(state, Player, player_claim),
+            //         Silence => {}
+            //     }
+            //
+            //     make_remaining_claims(state);
+            // }
+            //Force show all claims until player claims are implemented (if ever)
+            make_remaining_claims(state);
 
             let claims = get_claim_vec(state);
 
