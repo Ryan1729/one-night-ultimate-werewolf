@@ -2073,7 +2073,7 @@ fn push_claim_lines(state: &State,
             }
             TroublemakerAction(p1, p2) => {
                 result.push(format!("You claim that you are {}", Troublemaker));
-                let message = format!("and you swapeed the roles of {} and {}.", p1, p2);
+                let message = format!("and you swapped the roles of {} and {}.", p1, p2);
                 result.push(message);
             }
             DoppelTroublemakerAction(doppel_target, p1, p2) => {
@@ -2177,7 +2177,7 @@ fn push_claim_lines(state: &State,
             }
             TroublemakerAction(p1, p2) => {
                 result.push(format!("{} claims that they are {}", participant, Troublemaker));
-                result.push("and they swapeed the roles of the following two players:".to_owned());
+                result.push("and they swapped the roles of the following two players:".to_owned());
                 let message = format!("{} and {}.", p1, p2);
                 result.push(message);
             }

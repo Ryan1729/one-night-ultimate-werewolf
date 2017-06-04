@@ -1,6 +1,8 @@
-This is a template to make it easy to get started with live code reloading using BearLibTerminal.
+This a single player version of the tabletop game. The original, physical, multiplayer version can be purchased [here](https://beziergames.com/collections/one-night-ultimate-werewolf).
 
-Currently the live reloading is only tested/working on Linux, but the resulting program can be compiled in release mode for Linux and Windows. MacOS currently is untested.
+A pdf of the rules can be found [here](https://www.fgbradleys.com/rules/rules2/OneNightUltimateWerewolf-rules.pdf).
+
+![screenshot0](/screenshot0.png?raw=true "Robber turn screenshot")
 
 ## Installing required lib on Linux
 
