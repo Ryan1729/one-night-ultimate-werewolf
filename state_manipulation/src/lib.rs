@@ -40,7 +40,7 @@ pub fn new_state(size: Size) -> State {
     let seed: &[_] = &[timestamp as usize];
     let rng: StdRng = SeedableRng::from_seed(seed);
 
-    make_state(size, true, rng)
+    make_state(size, false, rng)
 }
 
 
